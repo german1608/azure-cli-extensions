@@ -12,4 +12,6 @@
 
 
 def load_command_table(self, _):  # pylint: disable=unused-argument
-    pass
+    with self.command_group("applink member"):
+        from .custom import Upgrade
+        self.command_table["applink member upgrade"] = Upgrade(loader=self)

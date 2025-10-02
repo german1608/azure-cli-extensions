@@ -10,5 +10,33 @@
 
 from knack.log import get_logger
 
+from .aaz.latest.applink.member import Update as MemberUpdate
+from azure.cli.core.aaz import AAZStrArg, AAZStrArgFormat
+
 
 logger = get_logger(__name__)
+
+class Upgrade(MemberUpdate):
+    """Upgrade command that allows updating only the version argument."""
+
+    @classmethod
+    def _build_arguments_schema(cls, *args, **kwargs):
+        args_schema = super()._build_arguments_schema(*args, **kwargs)
+
+        args_schema.release_channel._registered = False
+
+        args_schema.version = AAZStrArg(
+            options=["--version"],
+            arg_group="Upgrade",
+            help="AppLink version to upgrade to",
+            required=True,
+            fmt=AAZStrArgFormat(
+                pattern="^[a-zA-Z0-9-]{3,24}$",
+            ),
+        )
+
+        return args_schema
+
+    def pre_instance_update(self):
+        print(self.ctx.instance)
+        pass
