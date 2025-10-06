@@ -23,9 +23,9 @@ class Join(AAZCommand):
     """
 
     _aaz_info = {
-        "version": "2025-08-01-preview",
+        "version": "2025-04-01-preview",
         "resources": [
-            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.applink/applinks/{}/applinkmembers/{}", "2025-08-01-preview"],
+            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.applink/applinks/{}/applinkmembers/{}", "2025-04-01-preview"],
         ]
     }
 
@@ -95,13 +95,19 @@ class Join(AAZCommand):
         # define Arg Group "Properties"
 
         _args_schema = cls._args_schema
+        _args_schema.cluster_type = AAZStrArg(
+            options=["--cluster-type"],
+            arg_group="Properties",
+            help="Cluster type",
+            default="AKS",
+            enum={"AKS": "AKS"},
+        )
         _args_schema.upgrade_mode = AAZStrArg(
             options=["--upgrade-mode"],
             arg_group="Properties",
             help="Upgrade mode",
             default="FullyManaged",
             enum={"FullyManaged": "FullyManaged", "SelfManaged": "SelfManaged"},
-            enum_support_extension=True,
         )
 
         # define Arg Group "Resource"
@@ -182,7 +188,7 @@ class Join(AAZCommand):
         @property
         def url(self):
             return self.client.format_url(
-                "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.AppLink/appLinks/{appLinkName}/appLinkMembers/{appLinkMemberName}",
+                "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Private.CloudAppLink/appLinks/{appLinkName}/appLinkMembers/{appLinkMemberName}",
                 **self.url_parameters
             )
 
@@ -220,7 +226,7 @@ class Join(AAZCommand):
         def query_parameters(self):
             parameters = {
                 **self.serialize_query_param(
-                    "api-version", "2025-08-01-preview",
+                    "api-version", "2025-04-01-preview",
                     required=True,
                 ),
             }
@@ -251,6 +257,7 @@ class Join(AAZCommand):
 
             properties = _builder.get(".properties")
             if properties is not None:
+                properties.set_prop("clusterType", AAZStrType, ".cluster_type")
                 properties.set_prop("fullyManagedUpgradeProfile", AAZObjectType)
                 properties.set_prop("metadata", AAZObjectType, ".", typ_kwargs={"flags": {"required": True}})
                 properties.set_prop("mode", AAZStrType, ".upgrade_mode")

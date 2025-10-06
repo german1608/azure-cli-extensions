@@ -26,9 +26,9 @@ class ListVersions(AAZCommand):
     """
 
     _aaz_info = {
-        "version": "2025-08-01-preview",
+        "version": "2025-04-01-preview",
         "resources": [
-            ["mgmt-plane", "/subscriptions/{}/providers/microsoft.applink/locations/{}/availableversions", "2025-08-01-preview"],
+            ["mgmt-plane", "/subscriptions/{}/providers/microsoft.applink/locations/{}/availableversions", "2025-04-01-preview"],
         ]
     }
 
@@ -91,7 +91,7 @@ class ListVersions(AAZCommand):
         @property
         def url(self):
             return self.client.format_url(
-                "/subscriptions/{subscriptionId}/providers/Microsoft.AppLink/locations/{location}/availableVersions",
+                "/subscriptions/{subscriptionId}/providers/Private.CloudAppLink/locations/{location}/availableVersions",
                 **self.url_parameters
             )
 
@@ -124,7 +124,7 @@ class ListVersions(AAZCommand):
                     "kubernetesVersion", self.ctx.args.kubernetes_version,
                 ),
                 **self.serialize_query_param(
-                    "api-version", "2025-08-01-preview",
+                    "api-version", "2025-04-01-preview",
                     required=True,
                 ),
             }
