@@ -32,7 +32,31 @@ class ApplinkPreviewCommandsLoader(AzCommandsLoader):
                 args=args
             )
         load_command_table(self, args)
+
+        # Add table transformers to AAZ commands
+        self._add_table_transformers()
+
         return self.command_table
+
+    def _add_table_transformers(self):
+        """Add table transformers to AAZ-generated commands."""
+        from azext_applink_preview._format import (
+            applink_list_versions_table_format,
+            applink_member_list_table_format,
+            applink_member_upgrade_history_table_format
+        )
+
+        # Map command names to their table transformers
+        table_transformers = {
+            'applink list-versions': applink_list_versions_table_format,
+            'applink member list': applink_member_list_table_format,
+            'applink member upgrade-history list': applink_member_upgrade_history_table_format,
+        }
+
+        # Apply table transformers to commands
+        for command_name, transformer in table_transformers.items():
+            if command_name in self.command_table:
+                self.command_table[command_name].table_transformer = transformer
 
     def load_arguments(self, command):
         from azext_applink_preview._params import load_arguments
