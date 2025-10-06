@@ -11,7 +11,7 @@
 from knack.log import get_logger
 
 from .aaz.latest.applink.member import Update as MemberUpdate
-from azure.cli.core.aaz import AAZStrArg, AAZStrArgFormat
+from azure.cli.core.aaz import AAZStrArg, AAZStrArgFormat, AAZObjectType, AAZStrType, AAZDictType, AAZJsonInstanceUpdateOperation
 
 
 logger = get_logger(__name__)
@@ -31,12 +31,42 @@ class Upgrade(MemberUpdate):
             help="AppLink version to upgrade to",
             required=True,
             fmt=AAZStrArgFormat(
-                pattern="^[a-zA-Z0-9-]{3,24}$",
+                pattern="^\\d.\\d\\d$",
             ),
         )
 
         return args_schema
 
-    def pre_instance_update(self):
-        print(self.ctx.instance)
-        pass
+    def post_instance_update(self, instance):
+        instance.properties.fullyManagedUpgradeProfile = None
+
+    class InstanceUpdateByJson(AAZJsonInstanceUpdateOperation):
+        def __call__(self, *args, **kwargs):
+            self._update_instance(self.ctx.vars.instance)
+
+        def _update_instance(self, instance):
+            _instance_value, _builder = self.new_content_builder(
+                self.ctx.args,
+                value=instance,
+                typ=AAZObjectType
+            )
+
+            _builder.set_prop("properties", AAZObjectType)
+            _builder.set_prop("tags", AAZDictType, ".tags")
+
+            properties = _builder.get(".properties")
+            if properties is not None:
+                # Our custom selfManagedUpgradeProfile mapping
+                properties.set_prop("selfManagedUpgradeProfile", AAZObjectType)
+
+            # version -> selfManagedUpgradeProfile.version
+            self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
+            if self_managed_upgrade_profile is not None:
+                self_managed_upgrade_profile.set_prop("version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
+
+            tags = _builder.get(".tags")
+            if tags is not None:
+                tags.set_elements(AAZStrType, ".")
+
+            return _instance_value
+
