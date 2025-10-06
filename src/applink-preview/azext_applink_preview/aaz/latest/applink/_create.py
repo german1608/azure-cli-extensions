@@ -20,9 +20,6 @@ class Create(AAZCommand):
 
     :example: Create an AppLink resource
         az applink create --resource-group test_rg --app-link-name applink-test-01
-
-    :example: Create an AppLink with Observability Configuration
-        az applink create --resource-group test_rg --app-link-name applink-test-01 --metrics-monitor-workspace-resource-id "/subscriptions/11809CA1-E126-4017-945E-AA795CD5C5A9/resourceGroups/test_rg/providers/Microsoft.Monitor/accounts/test-monitor-workspace" --logs-workspace-resource-id "/subscriptions/11809CA1-E126-4017-945E-AA795CD5C5A9/resourceGroups/test_rg/providers/Microsoft.OperationalInsights/workspaces/test-logs-workspace" --traces-insights-resource-id "/subscriptions/11809CA1-E126-4017-945E-AA795CD5C5A9/resourceGroups/test_rg/providers/Microsoft.Insights/components/test-insights"
     """
 
     _aaz_info = {
