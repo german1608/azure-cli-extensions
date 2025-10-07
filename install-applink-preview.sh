@@ -14,5 +14,5 @@ echo "Saving as: $filename"
 curl -L "$final_url" -o "$filename"
 
 echo "Installing extension in az"
-az extension add --source "$filename"
+az extension add --source "$filename" --yes
 rm "$filename"
