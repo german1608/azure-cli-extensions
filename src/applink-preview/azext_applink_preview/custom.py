@@ -26,7 +26,8 @@ from azure.cli.core.azclierror import CLIError
 logger = get_logger(__name__)
 
 class Upgrade(MemberUpdate):
-    """Upgrade command that allows updating only the version argument."""
+    """Upgrade command that allows updating only the version argument.
+    """
 
     @classmethod
     def _build_arguments_schema(cls, *args, **kwargs):
@@ -80,26 +81,13 @@ class Upgrade(MemberUpdate):
             return _instance_value
 
 
-class Rollback(MemberUpdate, UpgradeHistoryList):
+class Rollback(Upgrade):
     """Rollback command that rolls back to the previous version."""
 
     @classmethod
     def _build_arguments_schema(cls, *args, **kwargs):
         args_schema = super()._build_arguments_schema(*args, **kwargs)
 
-        # Hide all upgrade-specific arguments since we don't need them for rollback
-        args_schema.release_channel._registered = False
-
-        # Add version argument (will be populated from upgrade history)
-        args_schema.version = AAZStrArg(
-            options=["--version"],
-            arg_group="Rollback",
-            help="Version to rollback to (auto-detected from upgrade history)",
-            required=False,
-            fmt=AAZStrArgFormat(
-                pattern="^\\d.\\d\\d$",
-            ),
-        )
         # Hide the version argument from users since it's auto-populated
         args_schema.version._registered = False
 
@@ -146,38 +134,4 @@ class Rollback(MemberUpdate, UpgradeHistoryList):
         except Exception as e:
             logger.error(f"Failed to get upgrade history: {str(e)}")
             raise CLIError(f"Failed to get upgrade history for rollback: {str(e)}")
-
-    def post_instance_update(self, instance):
-        # Ensure fullyManagedUpgradeProfile is cleared
-        instance.properties.fullyManagedUpgradeProfile = None
-
-    class InstanceUpdateByJson(AAZJsonInstanceUpdateOperation):
-        def __call__(self, *args, **kwargs):
-            self._update_instance(self.ctx.vars.instance)
-
-        def _update_instance(self, instance):
-            _instance_value, _builder = self.new_content_builder(
-                self.ctx.args,
-                value=instance,
-                typ=AAZObjectType
-            )
-
-            _builder.set_prop("properties", AAZObjectType)
-            _builder.set_prop("tags", AAZDictType, ".tags")
-
-            properties = _builder.get(".properties")
-            if properties is not None:
-                # Our custom selfManagedUpgradeProfile mapping
-                properties.set_prop("selfManagedUpgradeProfile", AAZObjectType)
-
-            # version -> selfManagedUpgradeProfile.version (same as Upgrade command)
-            self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
-            if self_managed_upgrade_profile is not None:
-                self_managed_upgrade_profile.set_prop("version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
-
-            tags = _builder.get(".tags")
-            if tags is not None:
-                tags.set_elements(AAZStrType, ".")
-
-            return _instance_value
 
