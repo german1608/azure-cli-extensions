@@ -11,7 +11,16 @@
 from knack.log import get_logger
 
 from .aaz.latest.applink.member import Update as MemberUpdate
-from azure.cli.core.aaz import AAZStrArg, AAZStrArgFormat, AAZObjectType, AAZStrType, AAZDictType, AAZJsonInstanceUpdateOperation
+from .aaz.latest.applink.member.upgrade_history import List as UpgradeHistoryList
+from azure.cli.core.aaz import (
+    AAZStrArg,
+    AAZStrArgFormat,
+    AAZObjectType,
+    AAZStrType,
+    AAZDictType,
+    AAZJsonInstanceUpdateOperation
+)
+from azure.cli.core.azclierror import CLIError
 
 
 logger = get_logger(__name__)
@@ -60,6 +69,108 @@ class Upgrade(MemberUpdate):
                 properties.set_prop("selfManagedUpgradeProfile", AAZObjectType)
 
             # version -> selfManagedUpgradeProfile.version
+            self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
+            if self_managed_upgrade_profile is not None:
+                self_managed_upgrade_profile.set_prop("version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
+
+            tags = _builder.get(".tags")
+            if tags is not None:
+                tags.set_elements(AAZStrType, ".")
+
+            return _instance_value
+
+
+class Rollback(MemberUpdate, UpgradeHistoryList):
+    """Rollback command that rolls back to the previous version."""
+
+    @classmethod
+    def _build_arguments_schema(cls, *args, **kwargs):
+        args_schema = super()._build_arguments_schema(*args, **kwargs)
+
+        # Hide all upgrade-specific arguments since we don't need them for rollback
+        args_schema.release_channel._registered = False
+
+        # Add version argument (will be populated from upgrade history)
+        args_schema.version = AAZStrArg(
+            options=["--version"],
+            arg_group="Rollback",
+            help="Version to rollback to (auto-detected from upgrade history)",
+            required=False,
+            fmt=AAZStrArgFormat(
+                pattern="^\\d.\\d\\d$",
+            ),
+        )
+        # Hide the version argument from users since it's auto-populated
+        args_schema.version._registered = False
+
+        return args_schema
+
+    def pre_instance_update(self, instance):
+        # Get the previous version from upgrade history
+        from azure.cli.core.util import send_raw_request
+
+        try:
+            # Build the URL for the upgrade history endpoint
+            subscription_id = getattr(self.ctx, 'subscription_id', '')
+            resource_group = getattr(getattr(self.ctx, 'args', None), 'resource_group', '')
+            applink_name = getattr(getattr(self.ctx, 'args', None), 'applink_name', '')
+            member_name = getattr(getattr(self.ctx, 'args', None), 'member_name', '')
+
+            # Make the request to get upgrade history
+            url = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Private.CloudAppLink/appLinks/{applink_name}/appLinkMembers/{member_name}/upgradeHistories"
+
+            cli_ctx = getattr(self.ctx, 'cli_ctx', None)
+            response = send_raw_request(cli_ctx, "GET", url + "?api-version=2025-04-01-preview")
+
+            if response.status_code == 200:
+                data = response.json()
+                if 'value' in data and len(data['value']) > 0:
+                    # Get the most recent upgrade history entry
+                    most_recent = data['value'][0]
+
+                    # The previous version would be the "from_version" of the most recent upgrade
+                    if 'properties' in most_recent and 'fromVersion' in most_recent['properties']:
+                        previous_version = most_recent['properties']['fromVersion']
+                        logger.info(f"Rolling back to version: {previous_version}")
+
+                        # Set the version argument that will be used by InstanceUpdateByJson
+                        if hasattr(self.ctx, 'args'):
+                            setattr(self.ctx.args, 'version', previous_version)
+
+                        # Clear any existing upgrade profiles
+                        instance.properties.fullyManagedUpgradeProfile = None
+                        return
+
+            raise CLIError("No upgrade history found. Cannot determine previous version for rollback.")
+
+        except Exception as e:
+            logger.error(f"Failed to get upgrade history: {str(e)}")
+            raise CLIError(f"Failed to get upgrade history for rollback: {str(e)}")
+
+    def post_instance_update(self, instance):
+        # Ensure fullyManagedUpgradeProfile is cleared
+        instance.properties.fullyManagedUpgradeProfile = None
+
+    class InstanceUpdateByJson(AAZJsonInstanceUpdateOperation):
+        def __call__(self, *args, **kwargs):
+            self._update_instance(self.ctx.vars.instance)
+
+        def _update_instance(self, instance):
+            _instance_value, _builder = self.new_content_builder(
+                self.ctx.args,
+                value=instance,
+                typ=AAZObjectType
+            )
+
+            _builder.set_prop("properties", AAZObjectType)
+            _builder.set_prop("tags", AAZDictType, ".tags")
+
+            properties = _builder.get(".properties")
+            if properties is not None:
+                # Our custom selfManagedUpgradeProfile mapping
+                properties.set_prop("selfManagedUpgradeProfile", AAZObjectType)
+
+            # version -> selfManagedUpgradeProfile.version (same as Upgrade command)
             self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
             if self_managed_upgrade_profile is not None:
                 self_managed_upgrade_profile.set_prop("version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
