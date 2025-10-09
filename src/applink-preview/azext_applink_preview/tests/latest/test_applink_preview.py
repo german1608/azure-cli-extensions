@@ -17,3 +17,16 @@ class ApplinkPreviewScenario(ScenarioTest):
             self.check('length(@)', 0)  # Expect empty array
         ])
 
+    @ResourceGroupPreparer()
+    def test_applink_create(self, resource_group):
+        # Test listing when no resources exist (would return empty list)
+        # This test would only run when creating recordings with real authentication
+        applink_name = self.create_random_name(prefix="cli", length=20)
+        self.kwargs.update({
+            "name": applink_name
+        })
+        # TODO: Figure out how to parameterize location
+        self.cmd('applink create --resource-group {rg} --applink-name {name} --location westus2', checks=[
+            self.check("name", applink_name)
+        ])
+
