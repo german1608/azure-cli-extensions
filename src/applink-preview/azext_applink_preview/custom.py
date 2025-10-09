@@ -11,7 +11,6 @@
 from knack.log import get_logger
 
 from .aaz.latest.applink.member import Update as MemberUpdate
-from .aaz.latest.applink.member.upgrade_history import List as UpgradeHistoryList
 from azure.cli.core.aaz import (
     AAZStrArg,
     AAZStrArgFormat,
@@ -24,6 +23,7 @@ from azure.cli.core.azclierror import CLIError
 
 
 logger = get_logger(__name__)
+
 
 class Upgrade(MemberUpdate):
     """Upgrade command that allows updating only the version argument.
@@ -72,7 +72,8 @@ class Upgrade(MemberUpdate):
             # version -> selfManagedUpgradeProfile.version
             self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
             if self_managed_upgrade_profile is not None:
-                self_managed_upgrade_profile.set_prop("version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
+                self_managed_upgrade_profile.set_prop(
+                    "version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
 
             tags = _builder.get(".tags")
             if tags is not None:
@@ -119,7 +120,7 @@ class Rollback(Upgrade):
                     # The previous version would be the "from_version" of the most recent upgrade
                     if 'properties' in most_recent and 'fromVersion' in most_recent['properties']:
                         previous_version = most_recent['properties']['fromVersion']
-                        logger.info(f"Rolling back to version: {previous_version}")
+                        logger.info("Rolling back to version: %s", previous_version)
 
                         # Set the version argument that will be used by InstanceUpdateByJson
                         if hasattr(self.ctx, 'args'):
@@ -132,6 +133,5 @@ class Rollback(Upgrade):
             raise CLIError("No upgrade history found. Cannot determine previous version for rollback.")
 
         except Exception as e:
-            logger.error(f"Failed to get upgrade history: {str(e)}")
+            logger.error(f"Failed to get upgrade history: %s", e)
             raise CLIError(f"Failed to get upgrade history for rollback: {str(e)}")
-

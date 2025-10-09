@@ -7,7 +7,6 @@ from collections import OrderedDict
 from jmespath import compile as compile_jmes, Options
 
 
-
 def applink_list_versions_table_format(results):
     """Format applink list-versions results for display with "-o table"."""
     formatted_results = []
@@ -95,5 +94,3 @@ def applink_member_upgrade_history_table_format(results):
         formatted_results.append(parsed.search(result, Options(dict_cls=OrderedDict)))
 
     return formatted_results
-
-
