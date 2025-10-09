@@ -9,5 +9,11 @@ from azure.cli.testsdk import *
 
 
 class ApplinkPreviewScenario(ScenarioTest):
-    # TODO: add tests here
-    pass
+    @ResourceGroupPreparer()
+    def test_applink_list_no_resources(self, resource_group):
+        # Test listing when no resources exist (would return empty list)
+        # This test would only run when creating recordings with real authentication
+        self.cmd('applink list --resource-group {rg}', checks=[
+            self.check('length(@)', 0)  # Expect empty array
+        ])
+

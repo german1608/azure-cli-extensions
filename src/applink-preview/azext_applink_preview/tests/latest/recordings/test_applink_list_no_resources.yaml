@@ -1,0 +1,56 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - application/json
+      Accept-Encoding:
+      - gzip, deflate
+      CommandName:
+      - applink list
+      Connection:
+      - keep-alive
+      ParameterSetName:
+      - --resource-group
+      User-Agent:
+      - AZURECLI/2.77.0 azsdk-python-core/1.35.0 Python/3.10.12 (Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35)
+    method: GET
+    uri: https://eastus2euap.management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/clitest.rg000001/providers/Private.CloudAppLink/appLinks?api-version=2025-04-01-preview
+  response:
+    body:
+      string: '{"value":[]}'
+    headers:
+      cache-control:
+      - no-cache
+      content-length:
+      - '12'
+      content-type:
+      - application/json; charset=utf-8
+      date:
+      - Thu, 09 Oct 2025 04:26:46 GMT
+      expires:
+      - '-1'
+      pragma:
+      - no-cache
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-cache:
+      - CONFIG_NOCACHE
+      x-content-type-options:
+      - nosniff
+      x-ms-original-request-ids:
+      - 16b1db89-e1e3-4233-8a57-5a9e3276c5a7
+      - b01f28c0-7936-44d7-ab5f-35085d59bb1f
+      - 34ab6a4b-3bf6-4596-8ebe-bb3eb93f32af
+      - 7b09f3e7-f9d0-42e7-828f-2152f55c9d82
+      - 7abe621a-c9eb-4d07-ab58-85d25fd14022
+      x-ms-ratelimit-remaining-subscription-resource-requests:
+      - '1099'
+      x-ms-throttling-version:
+      - v1
+      x-msedge-ref:
+      - 'Ref A: 15EC393F6531465F95AADDA8A1AA064E Ref B: CO6AA3150217031 Ref C: 2025-10-09T04:26:44Z'
+    status:
+      code: 200
+      message: OK
+version: 1
