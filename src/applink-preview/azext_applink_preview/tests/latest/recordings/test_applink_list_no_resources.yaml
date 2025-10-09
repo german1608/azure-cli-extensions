@@ -13,7 +13,7 @@ interactions:
       ParameterSetName:
       - --resource-group
       User-Agent:
-      - AZURECLI/2.77.0 azsdk-python-core/1.35.0 Python/3.10.12 (Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35)
+      - AZURECLI/2.78.0 azsdk-python-core/1.35.0 Python/3.10.12 (Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35)
     method: GET
     uri: https://eastus2euap.management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/clitest.rg000001/providers/Private.CloudAppLink/appLinks?api-version=2025-04-01-preview
   response:
@@ -27,7 +27,7 @@ interactions:
       content-type:
       - application/json; charset=utf-8
       date:
-      - Thu, 09 Oct 2025 16:20:11 GMT
+      - Thu, 09 Oct 2025 21:52:45 GMT
       expires:
       - '-1'
       pragma:
@@ -39,17 +39,17 @@ interactions:
       x-content-type-options:
       - nosniff
       x-ms-original-request-ids:
-      - 899007fa-6d2f-4a20-b671-f0058cb7b87f
-      - 6cb40d21-6d1a-4f0a-9546-bb168222bdfb
-      - ab45949d-c37b-48c5-88da-fdfaefb33df5
-      - f3283cb5-2500-46a3-9040-5570af500bc1
-      - 4f5c65d6-768d-47ac-8a6f-bb68baeefd69
+      - fb6a68d7-3246-4fca-88d0-96bed6780bf3
+      - 47587805-781b-476e-9615-148b16dfc91b
+      - fbfa93d5-efc4-4c79-a255-7c82a768298f
+      - 692a5aed-8fc7-455f-ab13-6a1ef12f4887
+      - 5647137c-fa2a-4ff8-9083-697a4a89daf7
       x-ms-ratelimit-remaining-subscription-resource-requests:
       - '1099'
       x-ms-throttling-version:
       - v1
       x-msedge-ref:
-      - 'Ref A: 572F21EA2BE244F0AC8ACF26CF66F76C Ref B: CO6AA3150218045 Ref C: 2025-10-09T16:20:10Z'
+      - 'Ref A: 9376A644873C4AE08A344F767EBA2B25 Ref B: CO6AA3150218021 Ref C: 2025-10-09T21:52:43Z'
     status:
       code: 200
       message: OK
