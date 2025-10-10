@@ -4163,6 +4163,71 @@ class AKSPreviewManagedClusterContextTestCase(unittest.TestCase):
             istio=self.models.IstioServiceMesh(revisions=["asm-1-17", "asm-1-18"]),
         ))
 
+    def test_handle_enable_istio_cni(self):
+        # Test enabling Istio CNI on existing ASM-enabled cluster
+        ctx_0 = AKSPreviewManagedClusterContext(
+            self.cmd,
+            AKSManagedClusterParamDict(
+                {
+                    # "enable_azure_service_mesh": True,
+                    "enable_istio_cni": True,
+                    # "revision": "asm-1-25"
+                }
+            ),
+            self.models,
+            decorator_mode=DecoratorMode.UPDATE,
+        )
+        old_profile = self.models.ServiceMeshProfile(
+            mode="Istio",
+            istio=self.models.IstioServiceMesh(
+                revisions=["asm-1-25"],
+                components=self.models.IstioComponents()
+            ),
+        )
+        new_profile, updated = ctx_0._handle_istio_cni_asm(old_profile)
+        self.assertEqual(updated, True)
+        self.assertEqual(new_profile, self.models.ServiceMeshProfile(
+            mode="Istio",
+            istio=self.models.IstioServiceMesh(
+                revisions=["asm-1-25"],
+                components=self.models.IstioComponents(
+                    proxy_redirection_mechanism="CNIChaining"
+                )
+            )
+        ))
+
+    def test_handle_disable_istio_cni(self):
+        # Test enabling Istio CNI on existing ASM-enabled cluster
+        ctx_0 = AKSPreviewManagedClusterContext(
+            self.cmd,
+            AKSManagedClusterParamDict(
+                {
+                    "disable_istio_cni": True,
+                }
+            ),
+            self.models,
+            decorator_mode=DecoratorMode.UPDATE,
+        )
+        old_profile = self.models.ServiceMeshProfile(
+            mode="Istio",
+            istio=self.models.IstioServiceMesh(
+                revisions=["asm-1-25"],
+                components=self.models.IstioComponents()
+            ),
+        )
+        new_profile, updated = ctx_0._handle_istio_cni_asm(old_profile)
+        self.assertEqual(updated, True)
+        self.assertEqual(new_profile, self.models.ServiceMeshProfile(
+            mode="Istio",
+            istio=self.models.IstioServiceMesh(
+                revisions=["asm-1-25"],
+                components=self.models.IstioComponents(
+                    proxy_redirection_mechanism="InitContainers"
+                )
+            )
+        ))
+
+
     def test_get_disable_local_accounts(self):
         # automatic cluster needs to enable the disable_local_accounts
         ctx_1 = AKSPreviewManagedClusterContext(
@@ -5082,7 +5147,7 @@ class AKSPreviewManagedClusterCreateDecoratorTestCase(unittest.TestCase):
         mc_3 = self.models.ManagedCluster(location="test_location")
         dec_3.context.attach_mc(mc_3)
         dec_mc_3 = dec_3.set_up_kms_infrastructure_encryption(mc_3)
-        
+
         # expected security profile with infrastructure encryption
         ground_truth_kube_resource_encryption_profile_3 = self.models.KubernetesResourceObjectEncryptionProfile(
             infrastructure_encryption="Enabled"
@@ -5112,7 +5177,7 @@ class AKSPreviewManagedClusterCreateDecoratorTestCase(unittest.TestCase):
         )
         dec_4.context.attach_mc(mc_4)
         dec_mc_4 = dec_4.set_up_kms_infrastructure_encryption(mc_4)
-        
+
         # should add to existing security profile
         ground_truth_kube_resource_encryption_profile_4 = self.models.KubernetesResourceObjectEncryptionProfile(
             infrastructure_encryption="Enabled"
