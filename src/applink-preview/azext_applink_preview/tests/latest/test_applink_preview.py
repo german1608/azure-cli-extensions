@@ -33,10 +33,34 @@ class BaseScenario(ScenarioTest):
                  checks=[
                      self.check("provisioningState", "Succeeded")
                  ]).get_output_in_json()
-        print(cluster)
+        aks_resource_id = cluster['id']
         self.kwargs.update({
-            "aks_resource_id": cluster['id']
+            "aks_resource_id": aks_resource_id
         })
+        return aks_cluster_name, aks_resource_id
+
+    def create_applink_member_fully_managed(self, create_applink=True, create_aks_cluster=True):
+        if create_applink:
+            self.create_applink()
+        if create_aks_cluster:
+            self.create_aks_cluster()
+
+        member_name = self.create_random_name(prefix="cliapplinkmember", length=24)
+        self.kwargs.update({
+            "member_name": member_name
+        })
+        join_cmd = (
+            "applink member join --resource-group {rg} --applink-name {applink_name} "
+            "--member-name {member_name} --cluster-type AKS --member-resource-id {aks_resource_id} "
+            "--upgrade-mode FullyManaged --release-channel Stable"
+        )
+        self.cmd(join_cmd, checks=[
+            self.check('name', member_name),
+            self.check('properties.fullyManagedUpgradeProfile.releaseChannel', "Stable"),
+            self.check('properties.mode', "FullyManaged"),
+        ])
+        return member_name
+
 
 
 class ApplinkPreviewScenario(BaseScenario):
@@ -70,25 +94,9 @@ class ApplinkMemberPreviewScenario(BaseScenario):
 
     @AKSCustomResourceGroupPreparer()
     def test_applink_member_join_fully_managed(self, resource_group):
-        self.create_applink()
-        self.create_aks_cluster()
-        member_name = self.create_random_name(prefix="cliapplinkmember", length=24)
-        self.kwargs.update({
-            "member_name": member_name
-        })
-        join_cmd = (
-            "applink member join --resource-group {rg} --applink-name {applink_name} "
-            "--member-name {member_name} --cluster-type AKS --member-resource-id {aks_resource_id} "
-            "--upgrade-mode FullyManaged --release-channel Stable"
-        )
-        self.cmd(join_cmd, checks=[
-            self.check('name', member_name),
-            self.check('properties.fullyManagedUpgradeProfile.releaseChannel', "Stable"),
-            self.check('properties.mode', "FullyManaged"),
-        ])
+        member_name = self.create_applink_member_fully_managed()
 
         get_cmd = "applink member show --resource-group {rg} --applink-name {applink_name} --member-name {member_name}"
-
         self.cmd(get_cmd, checks=[
             self.check('name', member_name),
             self.check('properties.fullyManagedUpgradeProfile.releaseChannel', "Stable"),
