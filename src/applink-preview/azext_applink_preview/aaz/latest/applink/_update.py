@@ -46,8 +46,8 @@ class Update(AAZCommand):
         # define Arg Group ""
 
         _args_schema = cls._args_schema
-        _args_schema.app_link_name = AAZStrArg(
-            options=["-n", "--name", "--app-link-name"],
+        _args_schema.applink_name = AAZStrArg(
+            options=["-n", "--name", "--applink-name"],
             help="The name of the AppLink",
             required=True,
             id_part="name",
@@ -137,7 +137,7 @@ class Update(AAZCommand):
         def url_parameters(self):
             parameters = {
                 **self.serialize_url_param(
-                    "appLinkName", self.ctx.args.app_link_name,
+                    "appLinkName", self.ctx.args.applink_name,
                     required=True,
                 ),
                 **self.serialize_url_param(
