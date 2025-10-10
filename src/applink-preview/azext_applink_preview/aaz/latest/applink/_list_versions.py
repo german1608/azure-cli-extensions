@@ -50,7 +50,6 @@ class ListVersions(AAZCommand):
 
         _args_schema = cls._args_schema
         _args_schema.location = AAZResourceLocationArg(
-            help="Location in where to find available AppLink versions",
             required=True,
         )
         _args_schema.kubernetes_version = AAZStrArg(
