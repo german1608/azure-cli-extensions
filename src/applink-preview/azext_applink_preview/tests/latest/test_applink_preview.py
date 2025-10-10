@@ -7,8 +7,38 @@
 
 from azure.cli.testsdk import ScenarioTest, ResourceGroupPreparer
 
+class BaseScenario(ScenarioTest):
+    def create_applink(self):
+        """Creates an applink, and returns its name. Additionally updates the kwargs to include the name"""
+        applink_name = self.create_random_name(prefix="cli", length=20)
+        self.kwargs.update({
+            "applink_name": applink_name
+        })
+        self.cmd('applink create --resource-group {rg} --applink-name {applink_name} --location westus2', checks=[
+            self.check("name", applink_name)
+        ])
+        return applink_name
 
-class ApplinkPreviewScenario(ScenarioTest):
+    def create_aks_cluster(self):
+        """Creates an AKS cluster, and returns its name. Additionally updates the kwargs to include the name and the resource id"""
+        aks_cluster_name = self.create_random_name(prefix="cliaks", length=15)
+
+        self.kwargs.update({
+            "aks_name": aks_cluster_name,
+        })
+        cluster = self.cmd('aks create \
+                 --resource-group {rg} --name {aks_name} \
+                 --enable-oidc-issuer --enable-workload-identity --os-sku AzureLinux',
+                 checks=[
+                     self.check("provisioningState", "Succeeded")
+                 ]).get_output_in_json()
+
+        self.kwargs.update({
+            "aks_resource_id": cluster.id
+        })
+
+
+class ApplinkPreviewScenario(BaseScenario):
     @ResourceGroupPreparer()
     def test_applink_list_no_resources(self, resource_group):
         # Test listing when no resources exist (would return empty list)
@@ -22,7 +52,7 @@ class ApplinkPreviewScenario(ScenarioTest):
         # Test listing when no resources exist (would return empty list)
         # This test would only run when creating recordings with real authentication
         applink_name = self.create_applink()
-        self.cmd('applink show --resource-group {rg} --name {name}', checks=[
+        self.cmd('applink show --resource-group {rg} --name {applink_name}', checks=[
             self.check("name", applink_name),
             self.check('properties.provisioningState', 'Succeeded')
         ])
@@ -30,15 +60,25 @@ class ApplinkPreviewScenario(ScenarioTest):
     @ResourceGroupPreparer()
     def test_applink_delete(self, resource_group):
         self.create_applink()
-        self.cmd('applink delete --resource-group {rg} --name {name} --yes')
+        self.cmd('applink delete --resource-group {rg} --name {applink_name} --yes')
 
-    def create_applink(self):
-        """Creates an applink, and returns its name. Additionally updates the kwargs to include the name"""
-        applink_name = self.create_random_name(prefix="cli", length=20)
+
+class ApplinkMemberPreviewScenario(BaseScenario):
+    def __init__(self, *args, **kwargs):
+        super(ApplinkMemberPreviewScenario, self).__init__(*args, **kwargs)
+
+    @ResourceGroupPreparer()
+    def test_applink_member_join_fully_managed(self):
+        self.create_applink()
+        self.create_aks_cluster()
+        member_name = self.create_random_name(prefix="cliapplinkmember", length=25)
         self.kwargs.update({
-            "name": applink_name
+            "member_name": member_name
         })
-        self.cmd('applink create --resource-group {rg} --applink-name {name} --location westus2', checks=[
-            self.check("name", applink_name)
-        ])
-        return applink_name
+        self.cmd('applink member join --resource-group {rg} \
+                  --applink-name {applink_name} \
+                  --member-name {member_name} \
+                  --cluster-type AKS \
+                  --member-resource-id {aks_resource_id} \
+                  --upgrade-mode FullyManaged \
+                  --release-channel Stable')
