@@ -17,6 +17,9 @@ from azure.cli.core.aaz import *
 )
 class Update(AAZCommand):
     """Update a AppLinkMember
+
+    :example: Update the release channel of an applink member
+        az applink member update --resource-group test_rg --applink-name applink-test-01 --member-name member-01 --release-channel Stable
     """
 
     _aaz_info = {

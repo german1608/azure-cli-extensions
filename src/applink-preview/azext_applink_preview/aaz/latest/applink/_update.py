@@ -17,6 +17,9 @@ from azure.cli.core.aaz import *
 )
 class Update(AAZCommand):
     """Update an AppLink
+
+    :example: Update tags of an AppLink resource
+        az applink update --resource-group test_rg --applink-name applink-test-01 --tags "{key2913:test_tag}"
     """
 
     _aaz_info = {
