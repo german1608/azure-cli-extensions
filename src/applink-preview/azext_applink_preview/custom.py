@@ -20,13 +20,20 @@ from azure.cli.core.aaz import (
     AAZJsonInstanceUpdateOperation
 )
 from azure.cli.core.azclierror import CLIError
-
+from azure.cli.core.aaz import register_command
 
 logger = get_logger(__name__)
 
 
+@register_command(
+    "applink member upgrade",
+    is_experimental=True
+)
 class Upgrade(MemberUpdate):
-    """Upgrade command that allows updating only the version argument.
+    """Upgrade the version of an AppLink member.
+
+    :example: Update the version of an AppLink member
+        az applink member upgrade --resource-group test_rg --applink-name applink-test-01 --member-name member-01 --version 1.27
     """
 
     @classmethod
@@ -81,9 +88,17 @@ class Upgrade(MemberUpdate):
 
             return _instance_value
 
+@register_command(
+    "applink member rollback",
+    is_experimental=True
+)
 
 class Rollback(Upgrade):
-    """Rollback command that rolls back to the previous version."""
+    """Rollback to the previous version after an upgrade.
+
+    :example: Rollback an AppLink member
+        az applink member rollback --resource-group test_rg --applink-name applink-test-01 --member-name member-01
+    """
 
     @classmethod
     def _build_arguments_schema(cls, *args, **kwargs):
