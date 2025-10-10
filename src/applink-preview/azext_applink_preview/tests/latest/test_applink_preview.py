@@ -76,10 +76,31 @@ class ApplinkMemberPreviewScenario(BaseScenario):
         self.kwargs.update({
             "member_name": member_name
         })
-        self.cmd('applink member join --resource-group {rg} \
-                  --applink-name {applink_name} \
-                  --member-name {member_name} \
-                  --cluster-type AKS \
-                  --member-resource-id {aks_resource_id} \
-                  --upgrade-mode FullyManaged \
-                  --release-channel Stable')
+        join_cmd = (
+            "applink member join --resource-group {rg} --applink-name {applink_name} "
+            "--member-name {member_name} --cluster-type AKS --member-resource-id {aks_resource_id} "
+            "--upgrade-mode FullyManaged --release-channel Stable"
+        )
+        self.cmd(join_cmd, checks=[
+            self.check('name', member_name),
+            self.check('properties.fullyManagedUpgradeProfile.releaseChannel', "Stable"),
+            self.check('properties.mode', "FullyManaged"),
+        ])
+
+        get_cmd = "applink member show --resource-group {rg} --applink-name {applink_name} --member-name {member_name}"
+
+        self.cmd(get_cmd, checks=[
+            self.check('name', member_name),
+            self.check('properties.fullyManagedUpgradeProfile.releaseChannel', "Stable"),
+            self.check('properties.mode', "FullyManaged"),
+        ])
+
+        update_cmd = (
+            "applink member update --resource-group {rg} --applink-name {applink_name} "
+            "--member-name {member_name} --release-channel Rapid"
+        )
+        self.cmd(update_cmd, checks=[
+            self.check('name', member_name),
+            self.check('properties.fullyManagedUpgradeProfile.releaseChannel', "Rapid"),
+            self.check('properties.mode', "FullyManaged"),
+        ])
