@@ -6,11 +6,12 @@
 # --------------------------------------------------------------------------------------------
 
 from azure.cli.testsdk import ScenarioTest, ResourceGroupPreparer
+from .custom_preparers import AKSCustomResourceGroupPreparer
 
 class BaseScenario(ScenarioTest):
     def create_applink(self):
         """Creates an applink, and returns its name. Additionally updates the kwargs to include the name"""
-        applink_name = self.create_random_name(prefix="cli", length=20)
+        applink_name = self.create_random_name(prefix="cliapplink", length=20)
         self.kwargs.update({
             "applink_name": applink_name
         })
@@ -32,9 +33,9 @@ class BaseScenario(ScenarioTest):
                  checks=[
                      self.check("provisioningState", "Succeeded")
                  ]).get_output_in_json()
-
+        print(cluster)
         self.kwargs.update({
-            "aks_resource_id": cluster.id
+            "aks_resource_id": cluster['id']
         })
 
 
@@ -67,11 +68,11 @@ class ApplinkMemberPreviewScenario(BaseScenario):
     def __init__(self, *args, **kwargs):
         super(ApplinkMemberPreviewScenario, self).__init__(*args, **kwargs)
 
-    @ResourceGroupPreparer()
-    def test_applink_member_join_fully_managed(self):
+    @AKSCustomResourceGroupPreparer()
+    def test_applink_member_join_fully_managed(self, resource_group):
         self.create_applink()
         self.create_aks_cluster()
-        member_name = self.create_random_name(prefix="cliapplinkmember", length=25)
+        member_name = self.create_random_name(prefix="cliapplinkmember", length=24)
         self.kwargs.update({
             "member_name": member_name
         })
