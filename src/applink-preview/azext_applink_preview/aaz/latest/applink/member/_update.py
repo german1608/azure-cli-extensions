@@ -11,10 +11,6 @@
 from azure.cli.core.aaz import *
 
 
-@register_command(
-    "applink member update",
-    is_experimental=True,
-)
 class Update(AAZCommand):
     """Update an AppLink member resource
 
@@ -91,6 +87,13 @@ class Update(AAZCommand):
         tags.Element = AAZStrArg()
 
         # define Arg Group "SelfManagedUpgradeProfile"
+
+        _args_schema = cls._args_schema
+        _args_schema.version = AAZStrArg(
+            options=["--version"],
+            arg_group="SelfManagedUpgradeProfile",
+            help="Istio version",
+        )
         return cls._args_schema
 
     def _execute_operations(self):
@@ -214,6 +217,10 @@ class Update(AAZCommand):
             fully_managed_upgrade_profile = _builder.get(".properties.fullyManagedUpgradeProfile")
             if fully_managed_upgrade_profile is not None:
                 fully_managed_upgrade_profile.set_prop("releaseChannel", AAZStrType, ".release_channel")
+
+            self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
+            if self_managed_upgrade_profile is not None:
+                self_managed_upgrade_profile.set_prop("version", AAZStrType, ".version")
 
             tags = _builder.get(".tags")
             if tags is not None:

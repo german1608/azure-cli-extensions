@@ -24,6 +24,22 @@ from azure.cli.core.aaz import register_command
 
 logger = get_logger(__name__)
 
+@register_command(
+    "applink member update",
+    is_experimental=True
+)
+class AppLinkMemberUpdate(MemberUpdate):
+    """Update an AppLink member resource
+
+    :example: Update the release channel of an applink member
+        az applink member update --resource-group test_rg --applink-name applink-test-01 --member-name member-01 --release-channel Stable
+    """
+    @classmethod
+    def _build_arguments_schema(cls, *args, **kwargs):
+        args_schema = super()._build_arguments_schema(*args, **kwargs)
+        args_schema.version._registered = False
+        return args_schema
+
 
 @register_command(
     "applink member upgrade",
@@ -39,54 +55,39 @@ class Upgrade(MemberUpdate):
     @classmethod
     def _build_arguments_schema(cls, *args, **kwargs):
         args_schema = super()._build_arguments_schema(*args, **kwargs)
-
         args_schema.release_channel._registered = False
-
-        args_schema.version = AAZStrArg(
-            options=["--version"],
-            arg_group="Upgrade",
-            help="AppLink version to upgrade to",
-            required=True,
-            fmt=AAZStrArgFormat(
-                pattern="^\\d.\\d\\d$",
-            ),
-        )
-
         return args_schema
 
-    def post_instance_update(self, instance):
-        instance.properties.fullyManagedUpgradeProfile = None
+    # class InstanceUpdateByJson(AAZJsonInstanceUpdateOperation):
+    #     def __call__(self, *args, **kwargs):
+    #         self._update_instance(self.ctx.vars.instance)
 
-    class InstanceUpdateByJson(AAZJsonInstanceUpdateOperation):
-        def __call__(self, *args, **kwargs):
-            self._update_instance(self.ctx.vars.instance)
+    #     def _update_instance(self, instance):
+    #         _instance_value, _builder = self.new_content_builder(
+    #             self.ctx.args,
+    #             value=instance,
+    #             typ=AAZObjectType
+    #         )
 
-        def _update_instance(self, instance):
-            _instance_value, _builder = self.new_content_builder(
-                self.ctx.args,
-                value=instance,
-                typ=AAZObjectType
-            )
+    #         _builder.set_prop("properties", AAZObjectType)
+    #         _builder.set_prop("tags", AAZDictType, ".tags")
 
-            _builder.set_prop("properties", AAZObjectType)
-            _builder.set_prop("tags", AAZDictType, ".tags")
+    #         properties = _builder.get(".properties")
+    #         if properties is not None:
+    #             # Our custom selfManagedUpgradeProfile mapping
+    #             properties.set_prop("selfManagedUpgradeProfile", AAZObjectType)
 
-            properties = _builder.get(".properties")
-            if properties is not None:
-                # Our custom selfManagedUpgradeProfile mapping
-                properties.set_prop("selfManagedUpgradeProfile", AAZObjectType)
+    #         # version -> selfManagedUpgradeProfile.version
+    #         self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
+    #         if self_managed_upgrade_profile is not None:
+    #             self_managed_upgrade_profile.set_prop(
+    #                 "version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
 
-            # version -> selfManagedUpgradeProfile.version
-            self_managed_upgrade_profile = _builder.get(".properties.selfManagedUpgradeProfile")
-            if self_managed_upgrade_profile is not None:
-                self_managed_upgrade_profile.set_prop(
-                    "version", AAZStrType, ".version", typ_kwargs={"flags": {"required": True}})
+    #         tags = _builder.get(".tags")
+    #         if tags is not None:
+    #             tags.set_elements(AAZStrType, ".")
 
-            tags = _builder.get(".tags")
-            if tags is not None:
-                tags.set_elements(AAZStrType, ".")
-
-            return _instance_value
+    #         return _instance_value
 
 @register_command(
     "applink member rollback",
