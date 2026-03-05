@@ -6,7 +6,45 @@
 # --------------------------------------------------------------------------------------------
 
 from azure.cli.core import AzCommandsLoader
+from azure.cli.core.aaz import AAZDictArg, AAZStrArg
 from azext_appnet_preview._help import helps  # pylint: disable=unused-import
+
+INJECT_HEADERS = False
+
+def _inject_appnet_custom_headers_to_http_request(attr):
+    if INJECT_HEADERS:
+        # Store the original header_parameters method/property
+        original_header_parameters = attr.header_parameters
+        # Override with custom logic
+        @property
+        def custom_header_parameters(instance):
+            headers = original_header_parameters.fget(instance) if hasattr(original_header_parameters, 'fget') else original_header_parameters(instance)
+            # Add your custom header logic here
+            appnet_custom_headers = instance.ctx.args.appnet_custom_headers.items()
+            for header_name, header_value in appnet_custom_headers:
+                headers[header_name] = str(header_value)
+            return headers
+        attr.header_parameters = custom_header_parameters
+
+def _inject_appnet_custom_headers_arguments(attr):
+    if INJECT_HEADERS:
+        original_build_arguments_schema = attr._build_arguments_schema
+
+        @classmethod
+        def custom_build_arguments_schema(cls, *args, **kwargs):
+            # Add your custom logic here before calling the original method
+            schema = original_build_arguments_schema(*args, **kwargs)
+
+            schema.appnet_custom_headers = AAZDictArg(
+                options=['--appnet-custom-headers'],
+                arg_group="Internal Development",
+                help='HTTP header override',
+            )
+            schema.appnet_custom_headers.Element = AAZStrArg()
+            # Add any post-processing of the schema here if needed
+            return schema
+
+        attr._build_arguments_schema = custom_build_arguments_schema
 
 
 class AppnetPreviewCommandsLoader(AzCommandsLoader):
@@ -26,11 +64,20 @@ class AppnetPreviewCommandsLoader(AzCommandsLoader):
         except ImportError:
             aaz = None
         if aaz:
-            load_aaz_command_table(
+            command_table, _ = load_aaz_command_table(
                 loader=self,
                 aaz_pkg_name=aaz.__name__,
                 args=args
             )
+            for cmd_obj in command_table.values():
+                for attr_name in dir(cmd_obj):
+                    attr = getattr(cmd_obj, attr_name)
+                    if isinstance(attr, type) and hasattr(attr, 'header_parameters'):
+                        _inject_appnet_custom_headers_to_http_request(attr)
+
+                    # Intercept the _build_arguments_schema classmethod
+                    if hasattr(attr, '_build_arguments_schema') and callable(getattr(attr, '_build_arguments_schema', None)):
+                        _inject_appnet_custom_headers_arguments(attr)
         load_command_table(self, args)
 
         # Add table transformers to AAZ commands
