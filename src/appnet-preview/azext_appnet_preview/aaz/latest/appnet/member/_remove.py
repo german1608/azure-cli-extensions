@@ -24,9 +24,9 @@ class Remove(AAZCommand):
     """
 
     _aaz_info = {
-        "version": "2025-08-01-preview",
+        "version": "2025-04-01-preview",
         "resources": [
-            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.applink/applinks/{}/applinkmembers/{}", "2025-08-01-preview"],
+            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.applink/applinks/{}/applinkmembers/{}", "2025-04-01-preview"],
         ]
     }
 
@@ -84,7 +84,7 @@ class Remove(AAZCommand):
         pass
 
     class AppLinkMembersDelete(AAZHttpOperation):
-        CLIENT_TYPE = "MgmtClient"
+        CLIENT_TYPE = "AppnetMgmtClient"
 
         def __call__(self, *args, **kwargs):
             request = self.make_request()
@@ -122,7 +122,7 @@ class Remove(AAZCommand):
         @property
         def url(self):
             return self.client.format_url(
-                "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.AppLink/appLinks/{appLinkName}/appLinkMembers/{appLinkMemberName}",
+                "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Private.CloudAppLink/appLinks/{appLinkName}/appLinkMembers/{appLinkMemberName}",
                 **self.url_parameters
             )
 
@@ -160,7 +160,7 @@ class Remove(AAZCommand):
         def query_parameters(self):
             parameters = {
                 **self.serialize_query_param(
-                    "api-version", "2025-08-01-preview",
+                    "api-version", "2025-04-01-preview",
                     required=True,
                 ),
             }

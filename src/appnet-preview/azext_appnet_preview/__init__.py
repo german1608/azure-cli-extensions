@@ -9,7 +9,7 @@ from azure.cli.core import AzCommandsLoader
 from azure.cli.core.aaz import AAZDictArg, AAZStrArg
 from azext_appnet_preview._help import helps  # pylint: disable=unused-import
 
-INJECT_HEADERS = False
+INJECT_HEADERS = True
 
 def _inject_appnet_custom_headers_to_http_request(attr):
     if INJECT_HEADERS:

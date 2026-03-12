@@ -36,7 +36,7 @@ with open('HISTORY.rst', 'r', encoding='utf-8') as f:
     HISTORY = f.read()
 
 setup(
-    name='appnet-preview',
+    name='appnet-private-preview',
     version=VERSION,
     description='Azure CLI commands for working with Azure Kubernetes Application Network resources.',
     long_description=README + '\n\n' + HISTORY,
