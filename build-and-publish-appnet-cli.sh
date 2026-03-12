@@ -5,39 +5,30 @@ set -e
 # Version from setup.py
 VERSION=$(grep "VERSION = " src/appnet-preview/setup.py | sed "s/VERSION = '//g" | sed "s/'//g")
 
-# Define wheel file names
-PUBLIC_WHEEL="appnet_preview-${VERSION}-py3-none-any.whl"
+# Define wheel file name
 PRIVATE_WHEEL="appnet_private_preview-${VERSION}-py3-none-any.whl"
 
-echo "=== Building Public Preview Extension ==="
-# Transform to public preview and build
-./appnet-public-preview.sh
-azdev extension build appnet-preview
-
-echo ""
 echo "=== Building Private Preview Extension ==="
 # Transform to private preview and build
 ./appnet-private-preview.sh
 azdev extension build appnet-preview
+git add src/appnet-preview
+if ! git diff --cached --quiet; then
+    git commit -m 'Update new aaz modules and commands'
+fi
 
 echo ""
-echo "=== Moving Extensions to Repo Root ==="
+echo "=== Moving Extension to Repo Root ==="
 
-# Move wheel files to repo root
-echo "Moving public preview wheel: $PUBLIC_WHEEL"
-mv dist/$PUBLIC_WHEEL .
-
+# Move wheel file to repo root
 echo "Moving private preview wheel: $PRIVATE_WHEEL"
 mv dist/$PRIVATE_WHEEL .
 
 echo ""
-echo "=== Committing Extensions ==="
-git add $PUBLIC_WHEEL $PRIVATE_WHEEL
+echo "=== Committing Extension ==="
+git add $PRIVATE_WHEEL
 git commit -m "updating our azure cli extensions"
 
 echo ""
-echo "✅ Successfully built and committed both extensions:"
-echo "  - Public: $PUBLIC_WHEEL"
+echo "✅ Successfully built and committed extension:"
 echo "  - Private: $PRIVATE_WHEEL"
-
-./appnet-public-preview.sh > /dev/null
