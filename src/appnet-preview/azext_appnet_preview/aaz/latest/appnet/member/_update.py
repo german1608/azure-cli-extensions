@@ -74,8 +74,8 @@ class Update(AAZCommand):
         # define Arg Group "Connectivity"
 
         _args_schema = cls._args_schema
-        _args_schema.east_west_gateway_visibility = AAZStrArg(
-            options=["--east-west-gateway-visibility"],
+        _args_schema.east_west_gateway = AAZStrArg(
+            options=["--east-west-gateway"],
             arg_group="Connectivity",
             help="East-West gateway visibility.",
             enum={"External": "External", "Internal": "Internal"},
@@ -101,12 +101,6 @@ class Update(AAZCommand):
             arg_group="Upgrade",
             help="Release channel",
             enum={"Rapid": "Rapid", "Stable": "Stable"},
-        )
-        _args_schema.upgrade_mode = AAZStrArg(
-            options=["--upgrade-mode"],
-            arg_group="Upgrade",
-            help="Upgrade mode.",
-            enum={"FullyManaged": "FullyManaged", "SelfManaged": "SelfManaged"},
         )
         _args_schema.version = AAZStrArg(
             options=["--version"],
@@ -236,20 +230,14 @@ class Update(AAZCommand):
             connectivity_profile = _builder.get(".properties.connectivityProfile")
             if connectivity_profile is not None:
                 connectivity_profile.set_prop("eastWestGateway", AAZObjectType)
-                connectivity_profile.set_prop("privateConnect", AAZDictType)
 
             east_west_gateway = _builder.get(".properties.connectivityProfile.eastWestGateway")
             if east_west_gateway is not None:
-                east_west_gateway.set_prop("visibility", AAZStrType, ".east_west_gateway_visibility")
-
-            private_connect = _builder.get(".properties.connectivityProfile.privateConnect")
-            if private_connect is not None:
-                private_connect.set_elements(AAZAnyType, ".")
+                east_west_gateway.set_prop("visibility", AAZStrType, ".east_west_gateway")
 
             upgrade_profile = _builder.get(".properties.upgradeProfile")
             if upgrade_profile is not None:
                 upgrade_profile.set_prop("fullyManagedUpgradeProfile", AAZObjectType)
-                upgrade_profile.set_prop("mode", AAZStrType, ".upgrade_mode")
                 upgrade_profile.set_prop("selfManagedUpgradeProfile", AAZObjectType)
 
             fully_managed_upgrade_profile = _builder.get(".properties.upgradeProfile.fullyManagedUpgradeProfile")
