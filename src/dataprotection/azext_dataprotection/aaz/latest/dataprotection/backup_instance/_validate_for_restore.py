@@ -22,9 +22,9 @@ class ValidateForRestore(AAZCommand):
     """
 
     _aaz_info = {
-        "version": "2024-04-01",
+        "version": "2026-06-01",
         "resources": [
-            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.dataprotection/backupvaults/{}/backupinstances/{}/validaterestore", "2024-04-01"],
+            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.dataprotection/backupvaults/{}/backupinstances/{}/validaterestore", "2026-06-01"],
         ]
     }
 
@@ -59,6 +59,11 @@ class ValidateForRestore(AAZCommand):
             help="The name of the backup vault.",
             required=True,
             id_part="name",
+            fmt=AAZStrArgFormat(
+                pattern="^[A-Za-z][-A-Za-z0-9]*[A-Za-z0-9]$",
+                max_length=50,
+                min_length=2,
+            ),
         )
 
         # define Arg Group "Parameters"
@@ -196,6 +201,9 @@ class ValidateForRestore(AAZCommand):
         restore_criteria.Element = AAZObjectArg()
 
         _element = cls._args_schema.restore_request_object.restore_target_info.item_level_restore_target_info.restore_criteria.Element
+        _element.generic_restore_datasource_criteria = AAZObjectArg(
+            options=["generic-restore-datasource-criteria"],
+        )
         _element.item_path_based_restore_criteria = AAZObjectArg(
             options=["item-path-based-restore-criteria"],
         )
@@ -215,6 +223,35 @@ class ValidateForRestore(AAZCommand):
             options=["range-based-item-level-restore-criteria"],
         )
 
+        generic_restore_datasource_criteria = cls._args_schema.restore_request_object.restore_target_info.item_level_restore_target_info.restore_criteria.Element.generic_restore_datasource_criteria
+        generic_restore_datasource_criteria.resource_selectors = AAZObjectArg(
+            options=["resource-selectors"],
+            help="List of resource identifiers that need to be restored",
+            required=True,
+        )
+
+        resource_selectors = cls._args_schema.restore_request_object.restore_target_info.item_level_restore_target_info.restore_criteria.Element.generic_restore_datasource_criteria.resource_selectors
+        resource_selectors.object_type = AAZStrArg(
+            options=["object-type"],
+            help="Type of the specific object - used for deserializing",
+            required=True,
+        )
+        resource_selectors.resource_identifiers = AAZListArg(
+            options=["resource-identifiers"],
+            help="List of resource identifiers to restore from",
+            required=True,
+        )
+        resource_selectors.resource_name_overrides = AAZDictArg(
+            options=["resource-name-overrides"],
+            help="This is a map of source resource names to target resources names to restore into. Any source name not included in the map will be restored with a default naming format",
+        )
+
+        resource_identifiers = cls._args_schema.restore_request_object.restore_target_info.item_level_restore_target_info.restore_criteria.Element.generic_restore_datasource_criteria.resource_selectors.resource_identifiers
+        resource_identifiers.Element = AAZStrArg()
+
+        resource_name_overrides = cls._args_schema.restore_request_object.restore_target_info.item_level_restore_target_info.restore_criteria.Element.generic_restore_datasource_criteria.resource_selectors.resource_name_overrides
+        resource_name_overrides.Element = AAZStrArg()
+
         item_path_based_restore_criteria = cls._args_schema.restore_request_object.restore_target_info.item_level_restore_target_info.restore_criteria.Element.item_path_based_restore_criteria
         item_path_based_restore_criteria.is_path_relative_to_backup_item = AAZBoolArg(
             options=["is-path-relative-to-backup-item"],
@@ -225,6 +262,10 @@ class ValidateForRestore(AAZCommand):
             options=["item-path"],
             help="The path of the item to be restored. It could be the full path of the item or the path relative to the backup item",
             required=True,
+        )
+        item_path_based_restore_criteria.rename_to = AAZStrArg(
+            options=["rename-to"],
+            help="Rename the item to be restored. Restore will rename the itemPath to this new name if the value is specified otherwise the itemPath will be restored as same name.",
         )
         item_path_based_restore_criteria.sub_item_path_prefix = AAZListArg(
             options=["sub-item-path-prefix"],
@@ -508,20 +549,18 @@ class ValidateForRestore(AAZCommand):
     @classmethod
     def _build_args_base_resource_properties_create(cls, _schema):
         if cls._args_base_resource_properties_create is not None:
-            _schema.object_type = cls._args_base_resource_properties_create.object_type
+            _schema.default_resource_properties = cls._args_base_resource_properties_create.default_resource_properties
             return
 
         cls._args_base_resource_properties_create = AAZObjectArg()
 
         base_resource_properties_create = cls._args_base_resource_properties_create
-        base_resource_properties_create.object_type = AAZStrArg(
-            options=["object-type"],
-            help="Type of the specific object - used for deserializing",
-            required=True,
-            enum={"DefaultResourceProperties": "DefaultResourceProperties"},
+        base_resource_properties_create.default_resource_properties = AAZObjectArg(
+            options=["default-resource-properties"],
+            blank={},
         )
 
-        _schema.object_type = cls._args_base_resource_properties_create.object_type
+        _schema.default_resource_properties = cls._args_base_resource_properties_create.default_resource_properties
 
     _args_datasource_set_create = None
 
@@ -756,7 +795,7 @@ class ValidateForRestore(AAZCommand):
         def query_parameters(self):
             parameters = {
                 **self.serialize_query_param(
-                    "api-version", "2024-04-01",
+                    "api-version", "2026-06-01",
                     required=True,
                 ),
             }
@@ -830,12 +869,14 @@ class ValidateForRestore(AAZCommand):
 
             _elements = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]")
             if _elements is not None:
+                _elements.set_const("objectType", "GenericRestoreDatasourceCriteria", AAZStrType, ".generic_restore_datasource_criteria", typ_kwargs={"flags": {"required": True}})
                 _elements.set_const("objectType", "ItemPathBasedRestoreCriteria", AAZStrType, ".item_path_based_restore_criteria", typ_kwargs={"flags": {"required": True}})
                 _elements.set_const("objectType", "KubernetesClusterRestoreCriteria", AAZStrType, ".kubernetes_cluster_restore_criteria", typ_kwargs={"flags": {"required": True}})
                 _elements.set_const("objectType", "KubernetesClusterVaultTierRestoreCriteria", AAZStrType, ".kubernetes_cluster_vault_tier_restore_criteria", typ_kwargs={"flags": {"required": True}})
                 _elements.set_const("objectType", "KubernetesPVRestoreCriteria", AAZStrType, ".kubernetes_pv_restore_criteria", typ_kwargs={"flags": {"required": True}})
                 _elements.set_const("objectType", "KubernetesStorageClassRestoreCriteria", AAZStrType, ".kubernetes_storage_class_restore_criteria", typ_kwargs={"flags": {"required": True}})
                 _elements.set_const("objectType", "RangeBasedItemLevelRestoreCriteria", AAZStrType, ".range_based_item_level_restore_criteria", typ_kwargs={"flags": {"required": True}})
+                _elements.discriminate_by("objectType", "GenericRestoreDatasourceCriteria")
                 _elements.discriminate_by("objectType", "ItemPathBasedRestoreCriteria")
                 _elements.discriminate_by("objectType", "KubernetesClusterRestoreCriteria")
                 _elements.discriminate_by("objectType", "KubernetesClusterVaultTierRestoreCriteria")
@@ -843,10 +884,29 @@ class ValidateForRestore(AAZCommand):
                 _elements.discriminate_by("objectType", "KubernetesStorageClassRestoreCriteria")
                 _elements.discriminate_by("objectType", "RangeBasedItemLevelRestoreCriteria")
 
+            disc_generic_restore_datasource_criteria = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]{objectType:GenericRestoreDatasourceCriteria}")
+            if disc_generic_restore_datasource_criteria is not None:
+                disc_generic_restore_datasource_criteria.set_prop("resourceSelectors", AAZObjectType, ".generic_restore_datasource_criteria.resource_selectors", typ_kwargs={"flags": {"required": True}})
+
+            resource_selectors = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]{objectType:GenericRestoreDatasourceCriteria}.resourceSelectors")
+            if resource_selectors is not None:
+                resource_selectors.set_prop("objectType", AAZStrType, ".object_type", typ_kwargs={"flags": {"required": True}})
+                resource_selectors.set_prop("resourceIdentifiers", AAZListType, ".resource_identifiers", typ_kwargs={"flags": {"required": True}})
+                resource_selectors.set_prop("resourceNameOverrides", AAZDictType, ".resource_name_overrides")
+
+            resource_identifiers = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]{objectType:GenericRestoreDatasourceCriteria}.resourceSelectors.resourceIdentifiers")
+            if resource_identifiers is not None:
+                resource_identifiers.set_elements(AAZStrType, ".")
+
+            resource_name_overrides = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]{objectType:GenericRestoreDatasourceCriteria}.resourceSelectors.resourceNameOverrides")
+            if resource_name_overrides is not None:
+                resource_name_overrides.set_elements(AAZStrType, ".")
+
             disc_item_path_based_restore_criteria = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]{objectType:ItemPathBasedRestoreCriteria}")
             if disc_item_path_based_restore_criteria is not None:
                 disc_item_path_based_restore_criteria.set_prop("isPathRelativeToBackupItem", AAZBoolType, ".item_path_based_restore_criteria.is_path_relative_to_backup_item", typ_kwargs={"flags": {"required": True}})
                 disc_item_path_based_restore_criteria.set_prop("itemPath", AAZStrType, ".item_path_based_restore_criteria.item_path", typ_kwargs={"flags": {"required": True}})
+                disc_item_path_based_restore_criteria.set_prop("renameTo", AAZStrType, ".item_path_based_restore_criteria.rename_to")
                 disc_item_path_based_restore_criteria.set_prop("subItemPathPrefix", AAZListType, ".item_path_based_restore_criteria.sub_item_path_prefix")
 
             sub_item_path_prefix = _builder.get(".restoreRequestObject.restoreTargetInfo{objectType:ItemLevelRestoreTargetInfo}.restoreCriteria[]{objectType:ItemPathBasedRestoreCriteria}.subItemPathPrefix")
@@ -1040,7 +1100,8 @@ class _ValidateForRestoreHelper:
     def _build_schema_base_resource_properties_create(cls, _builder):
         if _builder is None:
             return
-        _builder.set_prop("objectType", AAZStrType, ".object_type", typ_kwargs={"flags": {"required": True}})
+        _builder.set_const("objectType", "DefaultResourceProperties", AAZStrType, ".default_resource_properties", typ_kwargs={"flags": {"required": True}})
+        _builder.discriminate_by("objectType", "DefaultResourceProperties")
 
     @classmethod
     def _build_schema_datasource_set_create(cls, _builder):

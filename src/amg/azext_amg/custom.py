@@ -21,6 +21,8 @@ from .aaz.latest.grafana._update import Update as _GrafanaUpdate
 
 from ._client_factory import cf_amg
 from .utils import get_yes_or_no_option, search_folders
+from .dashboard_v2 import (is_v2_dashboard_definition, require_dashboard_v2_api_version,
+                           create_dashboard_v2, resolve_dashboard_v2_api_version, read_dashboard)
 
 logger = get_logger(__name__)
 
@@ -171,6 +173,9 @@ def _create_role_assignment(cli_ctx, principal_id, role_definition_id, scope):
     from azure.core.exceptions import HttpResponseError, ResourceExistsError
 
     assignments_client = get_mgmt_service_client(cli_ctx, AuthorizationManagementClient).role_assignments
+    # Unwrap AAZ values (e.g. instance.identity.principal_id) to a plain str so the
+    # authorization SDK can JSON-serialize the request body.
+    principal_id = str(principal_id)
     principal_types = [p.value for p in PrincipalType]
     current_principal_type = principal_types.pop(0)
 
@@ -323,9 +328,12 @@ def sync_dashboard(cmd, source, destination, folders_to_include=None, folders_to
 
 
 def show_dashboard(cmd, grafana_name, uid, resource_group_name=None, api_key_or_token=None, subscription=None):
-    response = _send_request(cmd, resource_group_name, grafana_name, "get", "/api/dashboards/uid/" + uid,
-                             api_key_or_token=api_key_or_token, subscription=subscription)
-    return json.loads(response.content)
+    # A v2 (dynamic dashboards) resource has no lossless classic representation, so read it through
+    # the dashboard apiserver. Classic dashboards keep using the legacy endpoint (unchanged shape).
+    endpoint, headers = _get_grafana_request_context(cmd, resource_group_name, grafana_name, subscription,
+                                                     api_key_or_token=api_key_or_token)
+    v2_version = resolve_dashboard_v2_api_version(endpoint, headers)
+    return read_dashboard(endpoint, headers, uid, v2_version)
 
 
 def list_dashboards(cmd, grafana_name, resource_group_name=None, api_key_or_token=None, subscription=None):
@@ -356,6 +364,16 @@ def create_dashboard(cmd, grafana_name, definition, title=None, folder=None, res
 
 def _create_dashboard(cmd, grafana_name, definition, title=None, folder_uid=None, resource_group_name=None,
                       overwrite=None, api_key_or_token=None, for_sync=True, subscription=None):
+    # v1 vs v2 is decided by the dashboard's own schema, not a global default: a v2 (dynamic
+    # dashboards) definition can only be created through the dashboard apiserver, while a classic
+    # definition must stay on the legacy endpoint.
+    if is_v2_dashboard_definition(definition):
+        endpoint, headers = _get_grafana_request_context(cmd, resource_group_name, grafana_name, subscription,
+                                                         api_key_or_token=api_key_or_token)
+        version = require_dashboard_v2_api_version(endpoint, headers)
+        return create_dashboard_v2(endpoint, headers, definition, version, title=title,
+                                   folder_uid=folder_uid, overwrite=overwrite)
+
     if "dashboard" in definition:
         payload = definition
     else:
@@ -395,6 +413,19 @@ def import_dashboard(cmd, grafana_name, definition, folder=None, resource_group_
                                           api_key_or_token=api_key_or_token)
     if data.get("meta", {}).get("isFolder", False):
         raise ArgumentUsageError("The provided definition is a folder, not a dashboard")
+
+    # A v2 (dynamic dashboards) definition must go through the dashboard apiserver. The classic
+    # __inputs datasource remapping below is a v1-only concept and doesn't apply.
+    if is_v2_dashboard_definition(data):
+        endpoint, headers = _get_grafana_request_context(cmd, resource_group_name, grafana_name, None,
+                                                         api_key_or_token=api_key_or_token)
+        version = require_dashboard_v2_api_version(endpoint, headers)
+        folder_uid = None
+        if folder:
+            folder_uid = _find_folder(cmd, resource_group_name, grafana_name, folder,
+                                      api_key_or_token=api_key_or_token)['uid']
+        return create_dashboard_v2(endpoint, headers, data, version, folder_uid=folder_uid,
+                                   overwrite=overwrite)
 
     if "dashboard" in data:
         payload = data
@@ -492,56 +523,8 @@ def list_data_sources(cmd, grafana_name, resource_group_name=None, api_key_or_to
 
 def update_data_source(cmd, grafana_name, data_source, definition, resource_group_name=None, api_key_or_token=None):
     data = _find_data_source(cmd, resource_group_name, grafana_name, data_source, api_key_or_token=api_key_or_token)
-    response = _send_request(cmd, resource_group_name, grafana_name, "put", "/api/datasources/" + str(data['id']),
+    response = _send_request(cmd, resource_group_name, grafana_name, "put", "/api/datasources/uid/" + data['uid'],
                              definition, api_key_or_token=api_key_or_token)
-    return json.loads(response.content)
-
-
-def list_notification_channels(cmd, grafana_name, resource_group_name=None, short=False, api_key_or_token=None):
-    if short is False:
-        response = _send_request(cmd, resource_group_name, grafana_name, "get", "/api/alert-notifications",
-                                 api_key_or_token=api_key_or_token)
-    else:
-        response = _send_request(cmd, resource_group_name, grafana_name, "get", "/api/alert-notifications/lookup",
-                                 api_key_or_token=api_key_or_token)
-    return json.loads(response.content)
-
-
-def show_notification_channel(cmd, grafana_name, notification_channel, resource_group_name=None, api_key_or_token=None):
-    return _find_notification_channel(cmd, resource_group_name, grafana_name, notification_channel,
-                                      api_key_or_token=api_key_or_token)
-
-
-def create_notification_channel(cmd, grafana_name, definition, resource_group_name=None, api_key_or_token=None):
-    response = _send_request(cmd, resource_group_name, grafana_name, "post", "/api/alert-notifications", definition,
-                             api_key_or_token=api_key_or_token)
-    return json.loads(response.content)
-
-
-def update_notification_channel(cmd, grafana_name, notification_channel, definition, resource_group_name=None,
-                                api_key_or_token=None):
-    data = _find_notification_channel(cmd, resource_group_name, grafana_name, notification_channel,
-                                      api_key_or_token=api_key_or_token)
-    definition['id'] = data['id']
-    response = _send_request(cmd, resource_group_name, grafana_name, "put",
-                             "/api/alert-notifications/" + str(data['id']),
-                             definition, api_key_or_token=api_key_or_token)
-    return json.loads(response.content)
-
-
-def delete_notification_channel(cmd, grafana_name, notification_channel, resource_group_name=None,
-                                api_key_or_token=None):
-    data = _find_notification_channel(cmd, resource_group_name, grafana_name, notification_channel,
-                                      api_key_or_token=api_key_or_token)
-    _send_request(cmd, resource_group_name, grafana_name, "delete", "/api/alert-notifications/" + str(data["id"]),
-                  api_key_or_token=api_key_or_token)
-
-
-def test_notification_channel(cmd, grafana_name, notification_channel, resource_group_name=None, api_key_or_token=None):
-    data = _find_notification_channel(cmd, resource_group_name, grafana_name, notification_channel,
-                                      api_key_or_token=api_key_or_token)
-    response = _send_request(cmd, resource_group_name, grafana_name, "post", "/api/alert-notifications/test",
-                             data, api_key_or_token=api_key_or_token)
     return json.loads(response.content)
 
 
@@ -609,39 +592,6 @@ def _find_folder(cmd, resource_group_name, grafana_name, folder, api_key_or_toke
     if not match:
         raise ArgumentUsageError(f"Couldn't find the folder '{folder}'.")
     return match
-
-
-def list_api_keys(cmd, grafana_name, resource_group_name=None):
-    response = _send_request(cmd, resource_group_name, grafana_name, "get",
-                             "/api/auth/keys?includedExpired=false&accesscontrol=true")
-    return json.loads(response.content)
-
-
-def delete_api_key(cmd, grafana_name, key, resource_group_name=None):
-    # Find the key id based on name
-    try:
-        int(key)
-    except ValueError:
-        # looks like a key name is provided, need to convert to id to delete
-        keys = list_api_keys(cmd, grafana_name, resource_group_name=resource_group_name)
-        temp = next((k for k in keys if k['name'].lower() == key.lower()), None)
-        if temp:
-            key = str(temp['id'])
-    _send_request(cmd, resource_group_name, grafana_name, "delete", "/api/auth/keys/" + key)
-
-
-def create_api_key(cmd, grafana_name, key, role=None, time_to_live=None, resource_group_name=None):
-    seconds = _convert_duration_to_seconds(time_to_live)
-
-    data = {
-        "name": key,
-        "role": role,
-        "secondsToLive": seconds
-    }
-    response = _send_request(cmd, resource_group_name, grafana_name, "post", "/api/auth/keys", data)
-    content = json.loads(response.content)
-    logger.warning("You will only be able to view this key here once. Please save it in a secure place.")
-    return content
 
 
 def _convert_duration_to_seconds(time_to_live):
@@ -864,32 +814,25 @@ def list_monitors(cmd, grafana_name, resource_group_name=None):
 
 
 def _find_data_source(cmd, resource_group_name, grafana_name, data_source, api_key_or_token=None):
-    response = _send_request(cmd, resource_group_name, grafana_name, "get", "/api/datasources/name/" + data_source,
-                             raise_for_error_status=False, api_key_or_token=api_key_or_token)
-    if response.status_code >= 400:
-        response = _send_request(cmd, resource_group_name, grafana_name, "get", "/api/datasources/" + data_source,
+    last_response = None
+    for path in (f"/api/datasources/name/{data_source}",
+                 f"/api/datasources/uid/{data_source}"):
+        response = _send_request(cmd, resource_group_name, grafana_name, "get", path,
                                  raise_for_error_status=False, api_key_or_token=api_key_or_token)
-        if response.status_code >= 400:
-            response = _send_request(cmd, resource_group_name, grafana_name,
-                                     "get", "/api/datasources/uid/" + data_source,
-                                     raise_for_error_status=False, api_key_or_token=api_key_or_token)
-    if response.status_code >= 400:
-        raise ArgumentUsageError(f"Couldn't found data source {data_source}. Ex: {response.status_code}")
-    return json.loads(response.content)
+        if response.status_code < 400:
+            return json.loads(response.content)
+        last_response = response
 
-
-def _find_notification_channel(cmd, resource_group_name, grafana_name, notification_channel, api_key_or_token=None):
-    response = _send_request(cmd, resource_group_name, grafana_name, "get",
-                             "/api/alert-notifications/" + notification_channel,
-                             raise_for_error_status=False, api_key_or_token=api_key_or_token)
-    if response.status_code >= 400:
-        response = _send_request(cmd, resource_group_name, grafana_name,
-                                 "get", "/api/alert-notifications/uid/" + notification_channel,
-                                 raise_for_error_status=False, api_key_or_token=api_key_or_token)
-    if response.status_code >= 400:
-        raise ArgumentUsageError(
-            f"Couldn't found notification channel {notification_channel}. Ex: {response.status_code}")
-    return json.loads(response.content)
+    # Both name and UID lookups failed. If the input is numeric, the user may be passing a
+    # legacy data source ID -- those endpoints (/api/datasources/{id}) were deprecated in
+    # Grafana 9 and are disabled by default in Grafana 13, so add a hint to the error.
+    message = f"Couldn't find data source {data_source} by name or UID."
+    if data_source.isdigit():
+        message += (" Numeric data source IDs are no longer supported. "
+                    "Pass the data source name or UID instead.")
+    if last_response is not None:
+        message += f" (last status code: {last_response.status_code})"
+    raise ArgumentUsageError(message)
 
 
 # For UX: we accept a file path for complex payload such as dashboard/data-source definition

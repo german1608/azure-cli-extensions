@@ -513,6 +513,7 @@ class SqlHandler(TargetHandler):
             logger.warning("Connecting to database...")
             self.create_aad_user_in_sql(connection_args, query_list)
         except AzureConnectionError as e:
+            logger.warning(e)
             from azure.cli.core.util import in_cloud_console
             if in_cloud_console():
                 self.set_target_firewall(
@@ -526,7 +527,6 @@ class SqlHandler(TargetHandler):
                         error_code = error_res.group(1)
                     telemetry.set_exception(e, "Connect-Db-Fail-" + error_code)
                     raise e
-                logger.warning(e)
                 # allow local access
                 ip_address = self.ip
                 self.set_target_firewall(True, ip_name, ip_address, ip_address)
@@ -673,7 +673,7 @@ class PostgresFlexHandler(TargetHandler):
                 else:
                     return
             db_info = run_cli_cmd(
-                'az postgres flexible-server db show --server-name "{}" --database-name "{}" -g "{}" --subscription "{}"'.format(
+                'az postgres flexible-server db show --server-name "{}" --name "{}" -g "{}" --subscription "{}"'.format(
                     self.db_server, self.dbname, self.resource_group, self.subscription))
             if db_info is None:
                 e = ResourceNotFoundError(

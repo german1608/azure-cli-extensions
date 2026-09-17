@@ -15,6 +15,68 @@ from ..utils import track_job_to_completion, wait_for_job_exclusivity_on_datasou
 
 class ConfigScenarioTest(ScenarioTest):
 
+    def test_dataprotection_esan_backupconfig_initialize(self):
+        self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                 '--datasource-type AzureElasticSAN '
+                 '--resource-selectors source-vol-1',
+                 checks=[
+                     self.check('object_type', 'GenericBackupDatasourceParameters'),
+                     self.check('length(resource_selectors)', 1),
+                     self.check('resource_selectors[0]', 'source-vol-1'),
+                 ])
+
+    def test_dataprotection_esan_backupconfig_requires_resource_selectors(self):
+        from azure.cli.core.azclierror import RequiredArgumentMissingError
+        with self.assertRaises(RequiredArgumentMissingError):
+            self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                     '--datasource-type AzureElasticSAN')
+
+    def test_dataprotection_esan_backupconfig_rejects_foreign_parameters(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                     '--datasource-type AzureElasticSAN '
+                     '--resource-selectors source-vol-1 '
+                     '--included-namespaces ns1')
+
+    def test_dataprotection_esan_restoreconfig_initialize(self):
+        self.kwargs.update({'overrides': "{'source-vol-1': 'target-vol-1'}"})
+        self.cmd('az dataprotection backup-instance initialize-restoreconfig '
+                 '--datasource-type AzureElasticSAN '
+                 '--resource-identifiers source-vol-1 '
+                 '--resource-name-overrides "{overrides}"',
+                 checks=[
+                     self.check('object_type', 'GenericRestoreDatasourceCriteria'),
+                     self.check('resource_selectors.object_type', 'ResourceListSelectionCriteria'),
+                     self.check('length(resource_selectors.resource_identifiers)', 1),
+                     self.check('resource_selectors.resource_identifiers[0]', 'source-vol-1'),
+                     self.check('resource_selectors.resource_name_overrides."source-vol-1"', 'target-vol-1'),
+                 ])
+
+    def test_dataprotection_esan_restoreconfig_requires_resource_identifiers(self):
+        from azure.cli.core.azclierror import RequiredArgumentMissingError
+        with self.assertRaises(RequiredArgumentMissingError):
+            self.cmd('az dataprotection backup-instance initialize-restoreconfig '
+                     '--datasource-type AzureElasticSAN')
+
+    def test_dataprotection_esan_restoreconfig_override_key_mismatch(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        self.kwargs.update({'overrides': "{'source-vol-x': 'target-vol-1'}"})
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-restoreconfig '
+                     '--datasource-type AzureElasticSAN '
+                     '--resource-identifiers source-vol-1 '
+                     '--resource-name-overrides "{overrides}"')
+
+    def test_dataprotection_esan_restoreconfig_override_target_duplicates(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        self.kwargs.update({'overrides': "{'source-vol-1': 'target-vol', 'source-vol-2': 'target-vol'}"})
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-restoreconfig '
+                     '--datasource-type AzureElasticSAN '
+                     '--resource-identifiers source-vol-1 source-vol-2 '
+                     '--resource-name-overrides "{overrides}"')
+
     @AllowLargeResponse()
     @unittest.skip("Tests are passing in local but not getting recorded and failing on cloud. Finding a fix.")
     def test_dataprotection_aks_backup_and_restore_initialize_configs(test):
@@ -50,3 +112,88 @@ class ConfigScenarioTest(ScenarioTest):
                  checks=[
                      test.check("resource_modifier_reference.CustomerResourceName", 'targetNamespace')
                  ])
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_blob_autoprotection_backupconfig(self):
+        self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                 '--datasource-type AzureBlob --auto-protection true',
+                 checks=[
+                     self.check('object_type', 'BlobBackupDatasourceParametersForAutoProtection'),
+                     self.check('auto_protection_settings.object_type', 'BlobBackupRuleBasedAutoProtectionSettings'),
+                     self.check('auto_protection_settings.enabled', True),
+                 ])
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_adls_autoprotection_backupconfig(self):
+        self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                 '--datasource-type AzureDataLakeStorage --auto-protection true',
+                 checks=[
+                     self.check('object_type', 'AdlsBlobBackupDatasourceParametersForAutoProtection'),
+                     self.check('auto_protection_settings.object_type', 'BlobBackupRuleBasedAutoProtectionSettings'),
+                     self.check('auto_protection_settings.enabled', True),
+                 ])
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_blob_autoprotection_with_exclusion_prefixes(self):
+        self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                 '--datasource-type AzureBlob --auto-protection true '
+                 '--exclusion-prefixes logs- temp-',
+                 checks=[
+                     self.check('object_type', 'BlobBackupDatasourceParametersForAutoProtection'),
+                     self.check('auto_protection_settings.enabled', True),
+                     self.check('length(auto_protection_settings.rules)', 2),
+                     self.check('auto_protection_settings.rules[0].object_type', 'BlobBackupAutoProtectionRule'),
+                     self.check('auto_protection_settings.rules[0].mode', 'Exclude'),
+                     self.check('auto_protection_settings.rules[0].type', 'Prefix'),
+                     self.check('auto_protection_settings.rules[0].pattern', 'logs-'),
+                     self.check('auto_protection_settings.rules[1].pattern', 'temp-'),
+                 ])
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_adls_autoprotection_with_exclusion_prefixes(self):
+        self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                 '--datasource-type AzureDataLakeStorage --auto-protection true '
+                 '--exclusion-prefixes staging-',
+                 checks=[
+                     self.check('object_type', 'AdlsBlobBackupDatasourceParametersForAutoProtection'),
+                     self.check('auto_protection_settings.enabled', True),
+                     self.check('length(auto_protection_settings.rules)', 1),
+                     self.check('auto_protection_settings.rules[0].pattern', 'staging-'),
+                 ])
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_autoprotection_no_exclusion_prefixes(self):
+        result = self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                          '--datasource-type AzureBlob --auto-protection true').get_output_in_json()
+        self.assertNotIn('rules', result.get('auto_protection_settings', {}))
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_autoprotection_invalid_with_container_list(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                     '--datasource-type AzureBlob --auto-protection true '
+                     '--container-list container1 container2')
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_autoprotection_invalid_with_include_all_containers(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                     '--datasource-type AzureBlob --auto-protection true '
+                     '--include-all-containers true')
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_exclusion_prefixes_without_autoprotection(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                     '--datasource-type AzureBlob '
+                     '--exclusion-prefixes logs-')
+
+    @unittest.skip("Client factory requires auth - tests pass locally but not in CI. Same issue as AKS config test above.")
+    def test_dataprotection_autoprotection_invalid_for_aks(self):
+        from azure.cli.core.azclierror import InvalidArgumentValueError
+        with self.assertRaises(InvalidArgumentValueError):
+            self.cmd('az dataprotection backup-instance initialize-backupconfig '
+                     '--datasource-type AzureKubernetesService --auto-protection true')

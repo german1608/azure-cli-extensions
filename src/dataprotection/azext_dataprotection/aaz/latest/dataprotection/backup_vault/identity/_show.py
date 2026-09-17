@@ -16,15 +16,12 @@ from azure.cli.core.aaz import *
 )
 class Show(AAZCommand):
     """Show the details of managed identities.
-
-    :example: Show identity of the Backup vault
-        az dataprotection backup-vault identity show -g testRG -v testVault
     """
 
     _aaz_info = {
-        "version": "2025-01-01",
+        "version": "2026-06-01",
         "resources": [
-            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.dataprotection/backupvaults/{}", "2025-01-01", "identity"],
+            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.dataprotection/backupvaults/{}", "2026-06-01", "identity"],
         ]
     }
 
@@ -131,7 +128,7 @@ class Show(AAZCommand):
         def query_parameters(self):
             parameters = {
                 **self.serialize_query_param(
-                    "api-version", "2025-01-01",
+                    "api-version", "2026-06-01",
                     required=True,
                 ),
             }
@@ -246,6 +243,9 @@ class _ShowHelper:
             serialized_name="bcdrSecurityLevel",
             flags={"read_only": True},
         )
+        properties.cost_management_settings = AAZObjectType(
+            serialized_name="costManagementSettings",
+        )
         properties.feature_settings = AAZObjectType(
             serialized_name="featureSettings",
         )
@@ -283,7 +283,11 @@ class _ShowHelper:
         )
         properties.storage_settings = AAZListType(
             serialized_name="storageSettings",
-            flags={"required": True},
+        )
+
+        cost_management_settings = _schema_backup_vault_resource_read.properties.cost_management_settings
+        cost_management_settings.granularity_level = AAZStrType(
+            serialized_name="granularityLevel",
         )
 
         feature_settings = _schema_backup_vault_resource_read.properties.feature_settings

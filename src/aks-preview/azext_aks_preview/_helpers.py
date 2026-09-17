@@ -2,6 +2,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
+from collections.abc import MutableMapping
+
 import errno
 import os
 import platform
@@ -9,7 +11,7 @@ import re
 import stat
 import sys
 import tempfile
-from typing import List, TypeVar
+from typing import Dict, List, Mapping, TypeVar
 
 import yaml
 from azext_aks_preview._client_factory import (
@@ -42,6 +44,95 @@ logger = get_logger(__name__)
 # type variables
 ManagedCluster = TypeVar("ManagedCluster")
 allowed_extensions = ["microsoft.dataprotection.kubernetes"]
+
+# Resource identifiers and command controls do not describe FlexNodes capabilities.
+_FLEXNODES_COMMON_PARAMETERS = {
+    "resource_group_name",
+    "cluster_name",
+    "nodepool_name",
+    "machine_name",
+    "vm_set_type",
+    "no_wait",
+    "aks_custom_headers",
+    "yes",
+    "if_match",
+    "if_none_match",
+}
+
+
+def get_user_supplied_argument_options(cmd) -> Dict[str, str]:
+    """Return explicitly supplied command arguments and their canonical option names."""
+    safe_params = set(cmd.cli_ctx.data.get("safe_params") or [])
+    supplied_options = {}
+    for argument_name, argument in getattr(cmd, "arguments", {}).items():
+        options = [option for option in (getattr(argument, "options_list", None) or [])
+                   if isinstance(option, str)]
+        if any(option in safe_params for option in options):
+            supplied_options[argument_name] = next(
+                (option for option in options if option.startswith("--")), options[0]
+            )
+    return supplied_options
+
+
+def validate_flexnodes_options(
+    cmd,
+    command_parameters: Mapping[str, object],
+    supported_parameters: Mapping[str, str],
+) -> None:
+    """Reject explicitly supplied options outside an operation's FlexNodes capabilities."""
+    supplied_options = get_user_supplied_argument_options(cmd)
+    allowed_parameters = _FLEXNODES_COMMON_PARAMETERS | set(supported_parameters)
+    unsupported_options = sorted({
+        option for name, option in supplied_options.items()
+        if name in command_parameters and name not in allowed_parameters
+    })
+    if unsupported_options:
+        raise InvalidArgumentValueError(
+            "The following options are not supported for FlexNodes pools: {}. "
+            "Supported FlexNodes pool options are: {}.".format(
+                ", ".join(unsupported_options), ", ".join(supported_parameters.values())
+            )
+        )
+
+
+def _reset_mapping_fields(model, preserved_fields):
+    model.clear()
+    for field, value in preserved_fields.items():
+        model[field] = value
+    for attr in list(getattr(model, "__dict__", {})):
+        if not attr.startswith("_"):
+            setattr(model, attr, preserved_fields.get(attr))
+
+
+def reset_agentpool_to_name_and_mode(agentpool, mode):
+    """Remove all agent pool fields except the resource name and pool mode."""
+    if isinstance(agentpool, MutableMapping):
+        name = agentpool["name"]
+        properties = agentpool.get("properties")
+        if isinstance(properties, MutableMapping):
+            _reset_mapping_fields(properties, {"mode": mode})
+            preserved_fields = {"name": name, "properties": properties}
+        else:
+            preserved_fields = {"name": name, "mode": mode}
+        _reset_mapping_fields(agentpool, preserved_fields)
+        return agentpool
+
+    properties = getattr(agentpool, "properties", None)
+    if isinstance(properties, MutableMapping):
+        properties.clear()
+        properties["mode"] = mode
+        preserved_attributes = ("name", "properties")
+    else:
+        agentpool.mode = mode
+        preserved_attributes = ("name", "mode")
+    for attr in list(vars(agentpool)):
+        if (
+            attr not in preserved_attributes
+            and not attr.startswith("_")
+            and hasattr(agentpool, attr)
+        ):
+            setattr(agentpool, attr, None)
+    return agentpool
 
 
 def which(binary):
@@ -95,6 +186,37 @@ def print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_nam
     finally:
         additional_file.close()
         os.remove(temp_path)
+
+
+def uses_kubelogin_devicecode(kubeconfig: str) -> bool:
+    try:
+        config = yaml.safe_load(kubeconfig)
+
+        # Check if users section exists and has at least one user
+        if not config or not config.get('users') or len(config['users']) == 0:
+            return False
+
+        first_user = config['users'][0]
+        user_info = first_user.get('user', {})
+        exec_info = user_info.get('exec', {})
+
+        # Check if command is kubelogin
+        command = exec_info.get('command', '')
+        if 'kubelogin' not in command:
+            return False
+
+        # Check if args contains --login and devicecode
+        args = exec_info.get('args', [])
+        # Join args into a string for easier pattern matching
+        args_str = ' '.join(args)
+        # Check for '--login devicecode' or '-l devicecode'
+        if '--login devicecode' in args_str or '-l devicecode' in args_str:
+            return True
+        return False
+    except (yaml.YAMLError, KeyError, TypeError, AttributeError) as e:
+        # If there's any error parsing the kubeconfig, assume it doesn't require kubelogin
+        logger.debug("Error parsing kubeconfig: %s", str(e))
+        return False
 
 
 def _merge_kubernetes_configurations(existing_file, addition_file, replace, context_name=None):
@@ -358,6 +480,27 @@ def check_is_azure_cli_core_editable_installed():
     return False
 
 
+def get_monitoring_addon_key(addon_profiles, monitoring_addon_name):
+    """Return the canonical key for the monitoring addon, normalizing non-standard casing.
+
+    The API response may return the monitoring addon key in any casing (e.g.
+    "omsagent", "omsAgent", "oMSaGent").  This helper performs a
+    case-insensitive lookup and, when a non-standard key is found, re-keys
+    addon_profiles in-place so that subsequent code always uses the canonical
+    monitoring_addon_name (lowercase) form.
+    """
+    if addon_profiles is None:
+        return monitoring_addon_name
+    if monitoring_addon_name in addon_profiles:
+        return monitoring_addon_name
+    target_lower = monitoring_addon_name.lower()
+    for key in list(addon_profiles):
+        if key.lower() == target_lower:
+            addon_profiles[monitoring_addon_name] = addon_profiles.pop(key)
+            return monitoring_addon_name
+    return monitoring_addon_name
+
+
 def check_is_monitoring_addon_enabled(addons, instance):
     is_monitoring_addon_enabled = False
     is_monitoring_addon = False
@@ -370,10 +513,11 @@ def check_is_monitoring_addon_enabled(addons, instance):
                     is_monitoring_addon = True
                     break
         addon_profiles = instance.addon_profiles or {}
+        monitoring_addon_key = get_monitoring_addon_key(addon_profiles, CONST_MONITORING_ADDON_NAME)
         is_monitoring_addon_enabled = (
             is_monitoring_addon
-            and CONST_MONITORING_ADDON_NAME in addon_profiles
-            and addon_profiles[CONST_MONITORING_ADDON_NAME].enabled
+            and monitoring_addon_key in addon_profiles
+            and addon_profiles[monitoring_addon_key].enabled
         )
     except Exception as ex:  # pylint: disable=broad-except
         logger.debug("failed to check monitoring addon enabled: %s", ex)
@@ -448,3 +592,23 @@ def get_extension_in_allow_list(result):
     if _check_if_extension_type_is_in_allow_list(result.extension_type.lower()):
         return result
     return None
+
+
+def process_dns_overrides(overrides_dict, target_dict, build_override_func):
+    """Helper function to safely process DNS overrides with null checks.
+
+    Processes DNS override dictionaries from LocalDNS configuration,
+    filtering out null values and applying the build function to valid entries.
+
+    :param overrides_dict: Dictionary containing DNS overrides (can be None)
+    :param target_dict: Target dictionary to populate with processed overrides
+    :param build_override_func: Function to build override objects from dict values
+    """
+    if not isinstance(overrides_dict, dict):
+        raise InvalidArgumentValueError(
+            f"Expected a dictionary for DNS overrides, but got {type(overrides_dict).__name__}: {overrides_dict}"
+        )
+    if overrides_dict is not None:
+        for key, value in overrides_dict.items():
+            if value is not None:
+                target_dict[key] = build_override_func(value)

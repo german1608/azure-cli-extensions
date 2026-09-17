@@ -13,6 +13,11 @@ from azure.cli.testsdk import ScenarioTest
 from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 
 from .config import CONFIG
+from .utils.assert_messages import (
+    missing_field_message,
+    properties_key_mismatch_message,
+)
+from .utils.output_checks import get_value
 
 
 def setup_scenario1(test):
@@ -35,6 +40,12 @@ def call_scenario1(test):
     step_disable_remote_vendor_management(
         test,
         checks=[test.check("status", "Succeeded")],
+    )
+    step_run_read_command(
+        test,
+        checks=[
+            test.check("status", "Succeeded"),
+        ],
     )
     step_show(test, checks=[])
     step_list_subscription(test, checks=[])
@@ -69,13 +80,37 @@ def step_disable_remote_vendor_management(test, checks=None):
     )
 
 
-def step_show(test, checks=None):
-    """StorageAppliance show operation"""
+def step_run_read_command(test, checks=None):
+    """StorageAppliance run read command operation"""
     if checks is None:
         checks = []
     test.cmd(
-        "az networkcloud storageappliance show --resource-group {resourceGroup} --storage-appliance-name {name}"
+        "az networkcloud storageappliance run-read-command --name {name} --resource-group {resourceGroup} --limit-time-seconds {limitTimeSeconds} --commands {runReadCommands}",
     )
+
+
+def step_show(test, checks=None):
+    """StorageAppliance show operation"""
+    if checks is not None:
+        test.cmd(
+            "az networkcloud storageappliance show --resource-group {resourceGroup} --storage-appliance-name {name}",
+            checks=checks,
+        )
+        return
+
+    result = test.cmd(
+        "az networkcloud storageappliance show --resource-group {resourceGroup} --storage-appliance-name {name}"
+    ).get_output_in_json()
+    context = "Storageappliance show"
+    assert result.get("name") is not None, missing_field_message(
+        context, "name", result
+    )
+    properties = result.get("properties")
+    assert result.get("id"), missing_field_message(context, "id", result)
+    assert properties is not None, missing_field_message(context, "properties", result)
+    assert properties.get("serialNumber") == get_value(
+        test, "serialNumber"
+    ), properties_key_mismatch_message("serialNumber")
 
 
 def step_list_resource_group(test, checks=None):
@@ -90,10 +125,6 @@ def step_list_subscription(test, checks=None):
     if checks is None:
         checks = []
     test.cmd("az networkcloud storageappliance list")
-
-
-# skip run-read-command as it's not implemented yet
-# def step_run_read_command(test, checks=None):
 
 
 def step_update(test, checks=None):
@@ -118,6 +149,10 @@ class StorageApplianceScenarioTest(ScenarioTest):
                 "resourceGroup": CONFIG.get("STORAGE_APPLIANCE", "resource_group"),
                 "tagsUpdate": CONFIG.get("STORAGE_APPLIANCE", "tags_update"),
                 "serialNumber": CONFIG.get("STORAGE_APPLIANCE", "serial_number"),
+                "runReadCommands": CONFIG.get("STORAGE_APPLIANCE", "run_read_commands"),
+                "limitTimeSeconds": CONFIG.get(
+                    "STORAGE_APPLIANCE", "limit_time_seconds"
+                ),
             }
         )
 

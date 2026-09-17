@@ -16,8 +16,9 @@ def step_create(test, checks=None, cache_num=1):
     if test.kwargs.get('no_database'):
         test.cmd('az redisenterprise create '
                  '--cluster-name "{cluster}" '
-                 '--location "centraluseuap" '
+                 '--location "centralindia" '
                  '--sku "Balanced_B10" '
+                 '--public-network-access "Enabled" '
                  '--tags tag1="value1" '
                  '--no-database '
                  '--resource-group "{rg}"',
@@ -27,18 +28,21 @@ def step_create(test, checks=None, cache_num=1):
             test.cmd('az redisenterprise create '
                         '--cluster-name "{cluster31}" '
                         '--sku "Balanced_B10" '
-                        '--location "centraluseuap" '
+                        '--location "centralindia" '
+                        '--public-network-access "Enabled" '
                         '--tags tag1="value1" '
                         '--no-database '
                         '--resource-group "{rg31}"',
                         checks=checks)
         elif cache_num == 2:
                 test.cmd('az redisenterprise create '
-                     '--location "centraluseuap" '
+                     '--location "centralindia" '
                      '--cluster-name "{cluster32}" '
                      '--sku "Balanced_B10" '
                      '--client-protocol "Encrypted" '
                      '--clustering-policy "EnterpriseCluster" '
+                     '--public-network-access "Enabled" '
+                     '--access-keys-auth Enabled '
                      '--eviction-policy "NoEviction" '
                      '--group-nickname "groupName" '
                      '--linked-databases id="/subscriptions/{subscription}/resourceGroups/{rg31}/providers/Microsoft.Cache/redisEnterprise/{cluster31}/databases/{database}" '
@@ -50,10 +54,12 @@ def step_create(test, checks=None, cache_num=1):
         test.cmd('az redisenterprise create '
                  '--cluster-name "{cluster}" '
                  '--sku "Balanced_B10" '
-                 '--location "centraluseuap" '
+                 '--location "centralindia" '
                  '--tags tag1="value1" '
                  '--resource-group "{rg}" '
                  '--high-availability "Disabled" '
+                 '--public-network-access "Enabled" '
+                 '--access-keys-auth Enabled '
                  '--minimum-tls-version "1.2" '
                  '--client-protocol "Encrypted" '
                  '--clustering-policy "EnterpriseCluster" '
@@ -63,8 +69,9 @@ def step_create(test, checks=None, cache_num=1):
         test.cmd('az redisenterprise create '
                  '--cluster-name "{cluster}" '
                  '--sku "Balanced_B10" '
-                 '--location "centraluseuap" '
+                 '--location "centralindia" '
                  '--tags tag1="value1" '
+                 '--public-network-access "Enabled" '
                  '--access-keys-auth Disabled '
                  '--resource-group "{rg}" '
                  '--minimum-tls-version "1.2" '
@@ -76,11 +83,13 @@ def step_create(test, checks=None, cache_num=1):
         test.cmd('az redisenterprise create '
                  '--cluster-name "{cluster}" '
                  '--sku "Balanced_B10" '
-                 '--location "centraluseuap" '
+                 '--location "centralindia" '
                  '--tags tag1="value1" '
                  '--minimum-tls-version "1.2" '
                  '--client-protocol "Encrypted" '
                  '--clustering-policy "NoCluster" '
+                 '--public-network-access "Enabled" '
+                 '--access-keys-auth Enabled '
                  '--eviction-policy "NoEviction" '
                  '--modules name="RedisBloom" '
                  '--modules name="RedisTimeSeries" '
@@ -88,14 +97,31 @@ def step_create(test, checks=None, cache_num=1):
                  '--port 10000 '
                  '--resource-group "{rg}"',
                  checks=checks)
+    elif test.kwargs.get('sku-update'):
+        test.cmd('az redisenterprise create '
+                 '--cluster-name "{cluster}" '
+                 '--sku "{initial_sku}" '
+                 '--location "centralindia" '
+                 '--tags tag1="value1" '
+                 '--minimum-tls-version "1.2" '
+                 '--client-protocol "Encrypted" '
+                 '--clustering-policy "EnterpriseCluster" '
+                 '--public-network-access "Enabled" '
+                 '--access-keys-auth Enabled '
+                 '--eviction-policy "NoEviction" '
+                 '--port 10000 '
+                 '--resource-group "{rg}"',
+                 checks=checks)
     else:
         test.cmd('az redisenterprise create '
                  '--cluster-name "{cluster}" '
                  '--sku "Balanced_B10" '
-                 '--location "centraluseuap" '
+                 '--location "centralindia" '
                  '--tags tag1="value1" '
                  #'--zones "1" "2" "3" '
                  '--minimum-tls-version "1.2" '
+                 '--public-network-access "Enabled" '
+                 '--access-keys-auth Enabled '
                  '--client-protocol "Encrypted" '
                  '--clustering-policy "EnterpriseCluster" '
                  '--eviction-policy "NoEviction" '
@@ -154,6 +180,16 @@ def step_delete(test, checks=None):
                  '--resource-group "{rg}"',
                  checks=checks)
 
+def step_update(test, checks=None):
+    if checks is None:
+        checks = []
+    if test.kwargs.get('sku-update'):
+        test.cmd('az redisenterprise update '
+                 '--cluster-name "{cluster}" '
+                 '--sku "{new_sku}" '
+                 '--resource-group "{rg}"',
+                 checks=checks)
+
 def step_database_update(test, checks=None):
     if checks is None:
         checks = []
@@ -175,6 +211,7 @@ def step_database_create(test, checks=None):
                 '--clustering-policy "EnterpriseCluster" '
                 '--eviction-policy "NoEviction" '
                 '--group-nickname "groupName" '
+                '--access-keys-auth Enabled '
                 '--linked-databases id="/subscriptions/{subscription}/resourceGroups/{rg31}/providers/Microsoft.Cache/redisEnterprise/{cluster31}/databases/{database}" '
                 '--port 10000 '
                 '--resource-group "{rg31}"',
@@ -195,6 +232,7 @@ def step_database_create(test, checks=None):
                  '--client-protocol "Plaintext" '
                  '--clustering-policy "OSSCluster" '
                  '--eviction-policy "AllKeysLRU" '
+                 '--access-keys-auth Enabled '
                  '--port 10000 '
                  '--resource-group "{rg}"',
                  checks=checks)

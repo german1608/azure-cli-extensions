@@ -11,9 +11,10 @@ import os
 import tempfile
 import shutil
 import json
+from unittest import mock
 
 # --- Module-level constants ---
-DEFAULT_RG = "ConfigManager-CloudTest-Playground-Portal"
+DEFAULT_RG = "audapure-ob-fresh"
 DEFAULT_VERSION = "1.0.0"
 DEFAULT_LOCATION = "eastus2euap"
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "resources", "sharedschema.yaml")
@@ -21,12 +22,18 @@ CONTEXT_SUBSCRIPTION_ID = "973d15c6-6c57-447e-b9c6-6d79b5b784ab"
 CONTEXT_RG = "Mehoopany"
 CONTEXT_LOCATION = "eastus2euap"
 CONTEXT_NAME = "Mehoopany-Context"
-CONFIG_TEMPLATE_RESOURCE_GROUP = "ConfigManager-CloudTest-Playground-Portal"
+CONFIG_TEMPLATE_RESOURCE_GROUP = "audapure-ob-fresh"
 CONFIG_TEMPLATE_LOCATION = "eastus2euap"
 CONFIG_TEMPLATE_FILE = os.path.join(os.path.dirname(__file__), "resources", "hotmelt-config-template-hard.yaml")
+CONFIG_SET_FILE = os.path.join(os.path.dirname(__file__), "resources", "configset.yaml")
 SPECS_FILE = os.path.join(os.path.dirname(__file__), "resources", "specs.json")
-CUSTOM_LOCATION_NAME = "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/configmanager-cloudtest-playground-portal/providers/Microsoft.ExtendedLocation/customLocations/den-Location"
-
+CUSTOM_LOCATION_NAME = "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/ConfigManager-CloudTest-Playground-DevTest/providers/Microsoft.ExtendedLocation/customLocations/DEV-CANARY-Location"
+# --- init command constants ---
+INIT_CLUSTER_NAME = "BVT-Test-ME-Cluster"
+INIT_RG = "mchichili-rg"
+INIT_LOCATION = "eastus2euap"
+INIT_CONTEXT_NAME = "Mehoopany"
+INIT_CONTEXT_LOCATION = "eastus2euap"
 class WorkloadOrchestrationTest(ScenarioTest):
 
     @classmethod
@@ -71,9 +78,86 @@ class WorkloadOrchestrationTest(ScenarioTest):
         ).get_output_in_json()
         assert result.get("status") == "Deletion Succeeded", "Schema version deletion did not succeed"
         # Optionally, delete the schema itself if needed (uncomment if supported)
-        # self.cmd(f'az workload-orchestration schema delete --resource-group {self.rg} --name {self.schema_name}')
+        self.cmd(f'az workload-orchestration schema delete --resource-group {self.rg} --name {self.schema_name} --yes')
 
     @AllowLargeResponse()
+    def test_init_lifecycle(self):
+        # 'init' prepares the Arc-connected cluster and creates a Context in one
+        # step. A tenant can hold only a single Context, so on an already-
+        # initialized tenant 'init' reports the Context as already-existing
+        # (non-fatal) and returns just the cluster-preparation result.
+        rg = INIT_RG
+        cluster_name = INIT_CLUSTER_NAME
+        location = INIT_LOCATION
+        context_name = INIT_CONTEXT_NAME
+        context_location = INIT_CONTEXT_LOCATION
+
+        # Cluster preparation shells out to external az CLI extensions
+        # (connectedk8s, k8s-extension, customlocation) in-process. Their HTTP
+        # api-versions are controlled by whatever build of those extensions is
+        # installed in CI, so they cannot be reliably matched against a fixed
+        # cassette. Mock the prepare step to keep this test deterministic and
+        # focused on 'init's own orchestration: creating the Context and
+        # gracefully handling the tenant's single-Context "already exists" case
+        # (which stays live against the recording).
+        cluster_prep_result = {
+            "clusterName": cluster_name,
+            "customLocationId": (
+                f"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/{rg}"
+                f"/providers/Microsoft.ExtendedLocation/customLocations/{cluster_name}-cl"
+            ),
+            "extensionId": (
+                f"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/{rg}"
+                f"/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}"
+                f"/providers/Microsoft.KubernetesConfiguration/extensions/wo-extension"
+            ),
+            "extendedLocation": {
+                "name": (
+                    f"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/{rg}"
+                    f"/providers/Microsoft.ExtendedLocation/customLocations/{cluster_name}-cl"
+                ),
+                "type": "CustomLocation",
+            },
+            "connectedClusterId": (
+                f"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/{rg}"
+                f"/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}"
+            ),
+        }
+
+        with mock.patch(
+            "azext_workload_orchestration.common.target_init",
+            return_value=cluster_prep_result,
+        ):
+            result = self.cmd(
+                f'az workload-orchestration init '
+                f'-c {cluster_name} -g {rg} -l {location} '
+                f'--context-name {context_name} --context-location {context_location} '
+                f'--capabilities [0].name=Quality [0].description=quality '
+                f'--hierarchies [0].name=country [0].description=Country '
+                f'[1].name=region [1].description=Region'
+            ).get_output_in_json()
+
+        # Cluster preparation is always reported and 'init' exits successfully
+        # even when the tenant's single Context already exists.
+        assert "cluster" in result, "init output missing 'cluster' section"
+
+        if "context" in result:
+            # Clean tenant: a Context was freshly created by init.
+            assert result["context"]["name"] == context_name
+            assert result["context"]["properties"]["provisioningState"] == "Succeeded"
+            assert any(
+                c["name"] == "Quality"
+                for c in result["context"]["properties"]["capabilities"]
+            ), "Quality capability not found on the created context"
+            # Clean up the Context created by init (cluster prep is idempotent
+            # and intentionally left in place).
+            self.cmd(
+                f'az workload-orchestration context delete '
+                f'-g {rg} --name {context_name} --yes',
+                checks=None
+            )
+
+    @AllowLargeResponse(size_kb=9999)
     def test_full_wom_workflow(self):
         # Get existing context and update capabilities
         context = self.cmd(
@@ -106,9 +190,16 @@ class WorkloadOrchestrationTest(ScenarioTest):
 
         rg = self.rg
         location = self.location
-        solution_template_name = f"{self.resource_prefix}-solution-77"
+        
+        # Create schema first
+        schema_name = f"{self.resource_prefix}-schema"
+        version = "1.0.0"
+        self.cmd(
+            f'az workload-orchestration schema create --resource-group {rg} --version "{version}" --schema-name "{schema_name}" --schema-file "{self.schema_file}" -l {location}',
+        )
+        
+        solution_template_name = f"{self.resource_prefix}-solution-cli"
         capability = f"{self.resource_prefix}-Shampoo"
-        version = "79.0.0"
         description = "This is Holtmelt Solution"
         # Create solution-template
         create_result = self.cmd(
@@ -142,7 +233,7 @@ class WorkloadOrchestrationTest(ScenarioTest):
         target_name = f"{self.resource_prefix}-mk78"
         display_name = target_name
         hierarchy_level = "line"
-        capability = f"{self.resource_prefix}-soap"
+        target_capability = capability  # Use same capability as solution template
         description = "This is MK-71 Site"
         solution_scope = "new"
         temp_dir = tempfile.mkdtemp()
@@ -188,7 +279,7 @@ class WorkloadOrchestrationTest(ScenarioTest):
             f"--name '{target_name}' "
             f"--display-name '{display_name}' "
             f"--hierarchy-level {hierarchy_level} "
-            f"--capabilities '{capability}' "
+            f"--capabilities '{target_capability}' "
             f"--description '{description}' "
             f"--solution-scope '{solution_scope}' "
             f"--target-specification \"@{target_spec_file}\" "
@@ -199,7 +290,7 @@ class WorkloadOrchestrationTest(ScenarioTest):
         assert create_result["properties"]["displayName"] == display_name
         assert create_result["properties"]["hierarchyLevel"] == hierarchy_level
         assert create_result["properties"]["provisioningState"] == "Succeeded"
-        assert capability in create_result["properties"]["capabilities"]
+        assert target_capability in create_result["properties"]["capabilities"]
         assert create_result["properties"]["description"] == description
         assert create_result["properties"]["solutionScope"] == solution_scope
         # Show target
@@ -211,43 +302,37 @@ class WorkloadOrchestrationTest(ScenarioTest):
         assert show_result["properties"]["displayName"] == display_name
         assert show_result["properties"]["hierarchyLevel"] == hierarchy_level
         assert show_result["properties"]["provisioningState"] == "Succeeded"
-        assert capability in show_result["properties"]["capabilities"]
+        assert target_capability in show_result["properties"]["capabilities"]
         # List targets and check for created entry
         # --- Configuration Download, Show, Set, Review, Publish, Install Tests ---
-        config_rg = DEFAULT_RG
-        config_resource_prefix = "cli"
-        config_solution_name = f"{config_resource_prefix}-solution"
-        config_target_name = f"{config_resource_prefix}-mk71"
-        config_file_name = f"{config_target_name}_{config_solution_name}.yaml"
-        config_file_path = os.path.join(tempfile.gettempdir(), config_file_name)
-        # Download configuration
+        config_rg = rg
+        config_solution_name = solution_template_name
+        config_target_name = target_name
+        
+        # Set configuration using configset.yaml from resources
         self.cmd(
-            f"az workload-orchestration configuration download "
-            f"-g {config_rg} --solution-template-name {config_solution_name} --target-name {config_target_name} "
+            f"az workload-orchestration configuration set "
+            f"--hierarchy-id '/subscriptions/{self.get_subscription_id()}/resourceGroups/{config_rg}/providers/Microsoft.Edge/targets/{config_target_name}' "
+            f"--template-rg {config_rg} --template-name {config_solution_name} --version {version} "
+            f"--file '{CONFIG_SET_FILE}' --solution"
         )
+        
         # Show configuration
         self.cmd(
             f"az workload-orchestration configuration show "
-            f"-g {config_rg} --solution-template-name {config_solution_name} --target-name {config_target_name}"
+            f"--hierarchy-id '/subscriptions/{self.get_subscription_id()}/resourceGroups/{config_rg}/providers/Microsoft.Edge/targets/{config_target_name}' "
+            f"--template-rg {config_rg} --template-name {config_solution_name} --version {version} --solution"
         )
-        config_set_path = os.path.join(temp_dir, "config.yaml")
-        config_yaml_content = """TemperatureRangeMax: 12
-HealthCheckEndpoint: http://localhost:8080/health
-EnableLocalLog: true
-AgentEndpoint: http://localhost:8080
-HealthCheckEnabled: true
-ErrorThreshold: 5
-ApplicationEndpoint: http://localhost:8080/app
-"""
-        with open(config_set_path, "w") as f:
-            f.write(config_yaml_content)
+
+        # Download configuration
         self.cmd(
-            f"az workload-orchestration configuration show "
-            f"-g {config_rg} --solution-template-name {config_solution_name} --target-name {config_target_name}"
+            f"az workload-orchestration configuration download "
+            f"--hierarchy-id '/subscriptions/{self.get_subscription_id()}/resourceGroups/{config_rg}/providers/Microsoft.Edge/targets/{config_target_name}' "
+            f"--template-rg {config_rg} --template-name {config_solution_name} --version {version} --solution"
         )
+
         # Review target using solution-template-version-id
-        if os.path.exists(config_file_path):
-            os.remove(config_file_path)
+
         # Remove solution-template version
         self.cmd(
             f"az workload-orchestration solution-template remove-version "
@@ -258,10 +343,25 @@ ApplicationEndpoint: http://localhost:8080/app
             f"az workload-orchestration solution-template delete "
             f"--solution-template-name '{solution_template_name}' "
             f"--resource-group {rg} --yes",
-            checks=None, expect_failure=True
+            checks=None
         )
         # Clean up the capabilities file
         os.remove(capabilities_file)
+        
+        # Remove schema version
+        self.cmd(
+            f'az workload-orchestration schema remove-version --schema-name {schema_name} --version {version} --resource-group {rg}'
+        )
+        # Delete schema (auto-confirm prompt)
+        self.cmd(f'az workload-orchestration schema delete --resource-group {rg} --name {schema_name} --yes')
+        # Delete target (auto-confirm prompt)
+        self.cmd(
+            f"az workload-orchestration target delete "
+            f"--target-name '{target_name}' "
+            f"--resource-group {rg} --target-name '{target_name}' --yes"
+        )
+
+        # Clean up temporary directory
         shutil.rmtree(temp_dir)
 
     @AllowLargeResponse()

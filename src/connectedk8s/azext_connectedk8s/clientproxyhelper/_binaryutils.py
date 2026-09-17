@@ -76,7 +76,7 @@ def _download_proxy_from_MCR(
     operating_system: str,
     architecture: str,
 ) -> None:
-    mcr_url = utils.get_mcr_path(cmd)
+    mcr_url = utils.get_mcr_path(cmd.cli_ctx.cloud.endpoints.active_directory)
 
     mar_target = f"{mcr_url}/{consts.CLIENT_PROXY_MCR_TARGET}/{operating_system.lower()}/{architecture}/arc-proxy"
     logger.debug(
@@ -227,7 +227,10 @@ def _check_proxy_installation(
 def _get_proxy_filename(operating_system: str, architecture: str) -> str:
     if operating_system.lower() == "darwin" and architecture == "386":
         raise azclierror.BadRequestError("Unsupported Darwin OS with 386 architecture.")
-    proxy_filename = f"arcProxy_{operating_system.lower()}_{architecture}_{consts.CLIENT_PROXY_VERSION.replace('.', '_')}"
+    proxy_filename = (
+        f"arcProxy_{operating_system.lower()}_{architecture}_"
+        f"{consts.CLIENT_PROXY_VERSION.replace('.', '_')}"
+    )
     if operating_system.lower() == "windows":
         proxy_filename += ".exe"
     return proxy_filename

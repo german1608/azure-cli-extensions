@@ -5,6 +5,10 @@
 # --------------------------------------------------------------------------------------------
 # pylint: disable=too-few-public-methods,unnecessary-pass,unused-argument
 
+# customizations-ignore-deprecations={"virtualmachine_create": ["--nd", "--network-data", "--ud", "--user-data"]}
+# customizations-ignore-removed={"virtualmachine_create": ["--ssh-public-keys"], "virtualmachine_update": ["--ssh-public-keys"]}
+# customizations-custom-params={"virtualmachine_create":["--ssh-key-values"]}
+
 """
 VirtualMachine tests scenarios
 """
@@ -13,6 +17,11 @@ from azure.cli.testsdk import ResourceGroupPreparer, ScenarioTest
 from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 
 from .config import CONFIG
+from .utils.assert_messages import (
+    missing_field_message,
+    properties_key_mismatch_message,
+)
+from .utils.output_checks import get_value
 
 
 def setup_scenario1(test):
@@ -22,6 +31,16 @@ def setup_scenario1(test):
 
 def cleanup_scenario1(test):
     """Env cleanup_scenario1"""
+    pass
+
+
+def setup_scenario(test):
+    """Env setup_scenario"""
+    pass
+
+
+def cleanup_scenario(test):
+    """Env cleanup_scenario"""
     pass
 
 
@@ -35,7 +54,7 @@ def call_scenario1(test):
             test.check("provisioningState", "Succeeded"),
         ],
     )
-    step_update(
+    step_update_scenario1(
         test,
         checks=[
             test.check("tags", "{tagsUpdate}"),
@@ -49,6 +68,76 @@ def call_scenario1(test):
     step_restart(test, checks=[])
     step_power_off(test, checks=[])
     step_start(test, checks=[])
+    step_assign_relay(test, checks=[])
+    step_delete(test, checks=[])
+    cleanup_scenario1(test)
+
+
+def call_scenario2(test):
+    """# Testcase: scenario2"""
+    setup_scenario(test)
+    step_create_with_userassigned_identity(
+        test,
+        checks=[
+            test.check("name", "{name}"),
+            test.check("provisioningState", "Succeeded"),
+        ],
+    )
+    step_update_UA_to_SA_managedidentity_scenario1(
+        test,
+        checks=[
+            test.check("tags", "{tagsUpdate}"),
+            test.check("provisioningState", "Succeeded"),
+        ],
+    )
+    step_update_scenario2(
+        test,
+        checks=[
+            test.check("tags", "{tagsUpdate}"),
+            test.check("provisioningState", "Succeeded"),
+        ],
+    )
+    step_show(test, checks=[])
+    step_list_resource_group(test, checks=[])
+    step_delete(test, checks=[])
+    cleanup_scenario(test)
+
+
+def call_scenario3(test):
+    """# Testcase: scenario3"""
+    setup_scenario(test)
+    step_create_systemassigned_managedidentity(
+        test,
+        checks=[
+            test.check("name", "{name}"),
+            test.check("provisioningState", "Succeeded"),
+        ],
+    )
+    step_update_UA_to_SA_managedidentity_scenario2(
+        test,
+        checks=[
+            test.check("tags", "{tagsUpdate}"),
+            test.check("provisioningState", "Succeeded"),
+        ],
+    )
+    step_show(test, checks=[])
+    step_list_resource_group(test, checks=[])
+    step_delete(test, checks=[])
+    cleanup_scenario(test)
+
+
+def call_scenario4(test):
+    """# Testcase: scenario4"""
+    setup_scenario1(test)
+    step_create_UA_SA_managedidentity(
+        test,
+        checks=[
+            test.check("name", "{name}"),
+            test.check("provisioningState", "Succeeded"),
+        ],
+    )
+    step_show(test, checks=[])
+    step_list_resource_group(test, checks=[])
     step_delete(test, checks=[])
     cleanup_scenario1(test)
 
@@ -60,25 +149,134 @@ def step_create(test, checks=None):
     test.cmd(
         "az networkcloud virtualmachine create --name {name} --extended-location "
         'name={extendedLocation} type="CustomLocation" --location {location} '
+        "--console-extended-location "
+        'name={extendedLocation} type="CustomLocation" --location {location} '
         "--admin-username {adminUserName} --boot-method {bootMethod} "
         "--cloud-services-network-attachment  attached-network-id={attachedNetworkID} "
         "--cpu-cores {cpuCores} "
         "--memory-size {memorySize} --network-attachments {networkAttachments} "
-        "--network-data {networkData} --placement-hints {placementHints} "
+        "--network-data-content {networkDataContent} --placement-hints {placementHints} "
         "--ssh-key-values {sshKeyValues} --storage-profile disk-size={diskSize} create-option={createOpt} "
         " delete-option={deleteOpt} --tags {tags} "
-        "--user-data {userData} --vm-device-model {vmDeviceModel} "
+        "--user-data-content {userDataContent} --vm-device-model {vmDeviceModel} "
         "--vm-image {vmName} --vm-image-repository-credentials password={password} "
         "registry-url={registryURL} username={userName} --resource-group {rg}",
         checks=checks,
     )
 
 
-def step_show(test, checks=None):
-    """VirtualMachine show operation"""
+def step_create_with_userassigned_identity(test, checks=None):
+    """VirtualMachine create operation with user assigned managed identity"""
     if checks is None:
         checks = []
-    test.cmd("az networkcloud virtualmachine show --name {name} --resource-group {rg}")
+    test.cmd(
+        "az networkcloud virtualmachine create --name {name} --extended-location "
+        'name={extendedLocation} type="CustomLocation" --location {location} '
+        "--ce-location "
+        'name={extendedLocation} type="CustomLocation" --location {location} '
+        "--admin-username {adminUserName} --boot-method {bootMethod} "
+        "--cloud-services-network-attachment  attached-network-id={attachedNetworkID} "
+        "--cpu-cores {cpuCores} "
+        "--memory-size-gb {memorySize} --na {networkAttachments} "
+        "--ndc {networkDataContent} --ph {placementHints} "
+        "--ssh-key-values {sshKeyValues} --storage-profile disk-size={diskSize} create-option={createOpt} "
+        " delete-option={deleteOpt} --tags {tags} "
+        "--udc {userDataContent} --vm-device-model {vmDeviceModel} "
+        "--vm-image {vmName} --vmi-creds password={password} "
+        "registry-url={registryURL} username={userName} --resource-group {rg} --user-assigned {miUserAssigned}",
+        checks=checks,
+    )
+
+
+def step_create_systemassigned_managedidentity(test, checks=None):
+    """VirtualMachine create operation with user assigned managed identity"""
+    if checks is None:
+        checks = []
+    test.cmd(
+        "az networkcloud virtualmachine create --virtual-machine-name {name} --extended-location "
+        'name={extendedLocation} type="CustomLocation" --location {location} '
+        "--admin-username {adminUserName} --boot-method {bootMethod} "
+        "--csn  attached-network-id={attachedNetworkID} "
+        "--cpu-cores {cpuCores} "
+        "--memory-size-gib {memorySize} --network-attachments {networkAttachments} "
+        "--network-data-content {networkDataContent} --placement-hints {placementHints} "
+        "--ssh-key-values {sshKeyValues} --storage-profile disk-size={diskSize} create-option={createOpt} "
+        " delete-option={deleteOpt} --tags {tags} "
+        "--user-data-content {userDataContent} --vm-device-model {vmDeviceModel} "
+        "--vm-image {vmName} --vm-image-repository-credentials password={password} "
+        "registry-url={registryURL} username={userName} --resource-group {rg} --system-assigned",
+        checks=checks,
+    )
+
+
+def step_create_UA_SA_managedidentity(test, checks=None):
+    """VirtualMachine create operation with system assigned and user assigned managed identity"""
+    if checks is None:
+        checks = []
+    test.cmd(
+        "az networkcloud virtualmachine create --name {name} --extended-location "
+        'name={extendedLocation} type="CustomLocation" --location {location} '
+        "--admin-username {adminUserName} --boot-method {bootMethod} "
+        "--cloud-services-network-attachment  attached-network-id={attachedNetworkID} "
+        "--cpu-cores {cpuCores} "
+        "--memory-size {memorySize} --network-attachments {networkAttachments} "
+        "--network-data-content {networkDataContent} --placement-hints {placementHints} "
+        "--ssh-key-values {sshKeyValues} --storage-profile disk-size={diskSize} create-option={createOpt} "
+        " delete-option={deleteOpt} --tags {tags} "
+        "--user-data-content {userDataContent} --vm-device-model {vmDeviceModel} "
+        "--vm-image {vmName} --vm-image-repository-credentials password={password} "
+        "registry-url={registryURL} username={userName} --resource-group {rg} "
+        "--mi-user-assigned {miUserAssigned} --mi-system-assigned",
+        checks=checks,
+    )
+
+
+def step_show(test, checks=None):
+    """VirtualMachine show operation"""
+    if checks is not None:
+        test.cmd(
+            "az networkcloud virtualmachine show --name {name} --resource-group {rg}",
+            checks=checks,
+        )
+        return
+
+    result = test.cmd(
+        "az networkcloud virtualmachine show --name {name} --resource-group {rg}"
+    ).get_output_in_json()
+    context = "Virtualmachine show"
+    assert result.get("name") is not None, missing_field_message(
+        context, "name", result
+    )
+    properties = result.get("properties")
+    assert result.get("id"), missing_field_message(context, "id", result)
+    assert properties is not None, missing_field_message(context, "properties", result)
+    assert properties.get("adminUsername") == get_value(
+        test, "adminUserName"
+    ), properties_key_mismatch_message("adminUsername")
+
+    assert properties.get("bootMethod") == get_value(
+        test, "bootMethod"
+    ), properties_key_mismatch_message("bootMethod")
+
+    assert properties.get("cpuCores") == get_value(
+        test, "cpuCores"
+    ), properties_key_mismatch_message("cpuCores")
+
+    assert properties.get("memorySizeGB") == get_value(
+        test, "memorySize"
+    ), properties_key_mismatch_message("memorySizeGB")
+
+    assert properties.get("networkAttachments") == get_value(
+        test, "networkAttachments"
+    ), properties_key_mismatch_message("networkAttachments")
+
+    assert properties.get("placementHints") == get_value(
+        test, "placementHints"
+    ), properties_key_mismatch_message("placementHints")
+
+    assert properties.get("vmDeviceModel") == get_value(
+        test, "vmDeviceModel"
+    ), properties_key_mismatch_message("vmDeviceModel")
 
 
 def step_reimage(test, checks=None):
@@ -118,6 +316,15 @@ def step_start(test, checks=None):
     )
 
 
+def step_assign_relay(test, checks=None):
+    """VirtualMachine assign relay operation"""
+    if checks is None:
+        checks = []
+    test.cmd(
+        "az networkcloud virtualmachine assign-relay --name {name} --resource-group {rg}  --machine-id {machineID} --relay-type {relayType} "
+    )
+
+
 def step_delete(test, checks=None):
     """VirtualMachine delete operation"""
     if checks is None:
@@ -141,14 +348,51 @@ def step_list_subscription(test, checks=None):
     test.cmd("az networkcloud virtualmachine list")
 
 
-def step_update(test, checks=None):
+def step_update_scenario1(test, checks=None):
     """VirtualMachine update operation"""
     if checks is None:
         checks = []
     test.cmd(
         "az networkcloud virtualmachine update --name {name} "
         "--vm-image-repository-credentials password={password} registry-url={registryURL} username={userName} "
-        "--tags {tagsUpdate} --resource-group {rg}"
+        "--tags {tagsUpdate} --resource-group {rg} --vmi-creds password={password} "
+        "registry-url={registryURL} username={userName} --user-assigned {miUserAssigned}"
+    )
+
+
+def step_update_scenario2(test, checks=None):
+    """VirtualMachine update operation"""
+    if checks is None:
+        checks = []
+    test.cmd(
+        "az networkcloud virtualmachine update --name {name} "
+        "--vm-image-repository-credentials password={password} registry-url={registryURL} username={userName} "
+        "--tags {tagsUpdate} --resource-group {rg} --vmi-creds password={password} "
+        "registry-url={registryURL} username={userName} --mi-user-assigned {miUserAssigned}"
+    )
+
+
+def step_update_UA_to_SA_managedidentity_scenario1(test, checks=None):
+    """VirtualMachine update operation UA to SA"""
+    if checks is None:
+        checks = []
+    test.cmd(
+        "az networkcloud virtualmachine update --virtual-machine-name {name} "
+        "--vm-image-repository-credentials password={password} registry-url={registryURL} username={userName} "
+        "--tags {tagsUpdate} --resource-group {rg} "
+        "--mi-system-assigned"
+    )
+
+
+def step_update_UA_to_SA_managedidentity_scenario2(test, checks=None):
+    """VirtualMachine update operation UA to SA"""
+    if checks is None:
+        checks = []
+    test.cmd(
+        "az networkcloud virtualmachine update --virtual-machine-name {name} "
+        "--vm-image-repository-credentials password={password} registry-url={registryURL} username={userName} "
+        "--tags {tagsUpdate} --resource-group {rg} "
+        "--system-assigned"
     )
 
 
@@ -172,7 +416,9 @@ class VirtualMachineScenarioTest(ScenarioTest):
                 "networkAttachments": CONFIG.get(
                     "VIRTUALMACHINE", "network_attachments"
                 ),
-                "networkData": CONFIG.get("VIRTUALMACHINE", "network_data"),
+                "networkDataContent": CONFIG.get(
+                    "VIRTUALMACHINE", "network_data_content"
+                ),
                 "placementHints": CONFIG.get("VIRTUALMACHINE", "placement_hints"),
                 "sshKeyValues": CONFIG.get("VIRTUALMACHINE", "ssh_key_values"),
                 "diskSize": CONFIG.get("VIRTUALMACHINE", "disk_size"),
@@ -180,12 +426,15 @@ class VirtualMachineScenarioTest(ScenarioTest):
                 "deleteOpt": CONFIG.get("VIRTUALMACHINE", "delete_opt"),
                 "tags": CONFIG.get("VIRTUALMACHINE", "tags"),
                 "tagsUpdate": CONFIG.get("VIRTUALMACHINE", "tags_update"),
-                "userData": CONFIG.get("VIRTUALMACHINE", "user_data"),
+                "userDataContent": CONFIG.get("VIRTUALMACHINE", "user_data_content"),
                 "vmDeviceModel": CONFIG.get("VIRTUALMACHINE", "vm_device_model"),
                 "vmName": CONFIG.get("VIRTUALMACHINE", "vm_name"),
                 "password": CONFIG.get("VIRTUALMACHINE", "password"),
                 "registryURL": CONFIG.get("VIRTUALMACHINE", "registry_url"),
                 "userName": CONFIG.get("VIRTUALMACHINE", "user_name"),
+                "miUserAssigned": CONFIG.get("VIRTUALMACHINE", "mi_user_assigned"),
+                "machineID": CONFIG.get("VIRTUALMACHINE", "machine_id"),
+                "relayType": CONFIG.get("VIRTUALMACHINE", "relay_type"),
             }
         )
 
@@ -194,3 +443,21 @@ class VirtualMachineScenarioTest(ScenarioTest):
     def test_virtualmachine_scenario1(self):
         """test scenario for VirtualMachine CRUD operations"""
         call_scenario1(self)
+
+    @AllowLargeResponse()
+    @ResourceGroupPreparer(name_prefix="clitest_rg"[:7], key="rg", parameter_name="rg")
+    def test_virtualmachine_scenario2(self):
+        """test scenario for VirtualMachine operations with userassigned identity"""
+        call_scenario2(self)
+
+    @AllowLargeResponse()
+    @ResourceGroupPreparer(name_prefix="clitest_rg"[:7], key="rg", parameter_name="rg")
+    def test_virtualmachine_scenario3(self):
+        """test scenario for VirtualMachine operations with system assigned identity"""
+        call_scenario3(self)
+
+    @AllowLargeResponse()
+    @ResourceGroupPreparer(name_prefix="clitest_rg"[:7], key="rg", parameter_name="rg")
+    def test_virtualmachine_scenario4(self):
+        """test scenario for VirtualMachine operations with UA and system assigned identity"""
+        call_scenario4(self)

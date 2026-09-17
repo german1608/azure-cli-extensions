@@ -5,18 +5,30 @@
 
 # pylint: disable=line-too-long,unused-argument
 
+import re
+
+from azure.cli.core.azclierror import InvalidArgumentValueError
+
 from .operations.workspace import WorkspaceInfo
 from .operations.target import TargetInfo
 
 
-def validate_workspace_internal(cmd, namespace, require_location):
+# Accept UPNs with exactly one '@' and no dotted-domain requirement; reject whitespace and Graph URL path separators.
+EMAIL_PATTERN = re.compile(r"[^@/\\\s]+@[^@/\\\s]+")
+
+
+def validate_email(namespace):
+    if not EMAIL_PATTERN.fullmatch(namespace.email):
+        raise InvalidArgumentValueError(f"'{namespace.email}' is not a valid email address.")
+
+
+def validate_workspace_info(cmd, namespace):
     """
-    Internal implementation to validate workspace info parameters with an optional location
+    Makes sure all parameters for a workspace are available.
     """
     group = getattr(namespace, 'resource_group_name', None)
     name = getattr(namespace, 'workspace_name', None)
-    location = getattr(namespace, 'location', None)
-    ws = WorkspaceInfo(cmd, group, name, location)
+    ws = WorkspaceInfo(cmd, group, name)
 
     if not ws.subscription:
         raise ValueError("Missing subscription argument")
@@ -24,22 +36,11 @@ def validate_workspace_internal(cmd, namespace, require_location):
         raise ValueError("Missing resource-group argument")
     if not ws.name:
         raise ValueError("Missing workspace-name argument")
-    if require_location and not ws.location:
-        raise ValueError("Missing location argument")
 
 
-def validate_workspace_info(cmd, namespace):
-    """
-    Makes sure all parameters for a workspace are available including location.
-    """
-    validate_workspace_internal(cmd, namespace, True)
-
-
-def validate_workspace_info_no_location(cmd, namespace):
-    """
-    Makes sure all parameters for a workspace are available, not including location.
-    """
-    validate_workspace_internal(cmd, namespace, False)
+def validate_workspace_user(cmd, namespace):
+    validate_email(namespace)
+    validate_workspace_info(cmd, namespace)
 
 
 def validate_target_info(cmd, namespace):

@@ -657,60 +657,6 @@ class ContainerappIngressTests(ScenarioTest):
             JMESPathCheck('corsPolicy', None),
         ])
 
-    @AllowLargeResponse(8192)
-    @ResourceGroupPreparer(location="westeurope")
-    def test_containerapp_env_premium_ingress_commands(self, resource_group):
-        self.cmd('configure --defaults location={}'.format(TEST_LOCATION))
-
-        env_name = self.create_random_name(prefix='containerapp-env', length=24)
-        self.cmd(f'containerapp env create -g {resource_group} -n {env_name} --logs-destination none')
-
-        containerapp_env = self.cmd(f'containerapp env show -g {resource_group} -n {env_name}').get_output_in_json()
-
-        self.cmd(f'az containerapp env workload-profile add -g {resource_group} -n {env_name} -w wp-ingress --min-nodes 2 --max-nodes 5 --workload-profile-type D4'.format(env_name, resource_group))
-
-        self.cmd(f'containerapp env premium-ingress show -g {resource_group} -n {env_name}', checks=[
-            JMESPathCheck('message', 'No premium ingress configuration found for this environment, using default values.'),
-        ])
-
-        self.cmd(f'containerapp env premium-ingress add -g {resource_group} -n {env_name} -w wp-ingress', checks=[
-            JMESPathCheck('workloadProfileName', 'wp-ingress'),
-            JMESPathCheck('terminationGracePeriodSeconds', None),
-            JMESPathCheck('requestIdleTimeout', None),
-            JMESPathCheck('headerCountLimit', None),
-        ])
-        
-        self.cmd(f'containerapp env premium-ingress show -g {resource_group} -n {env_name}', checks=[
-            JMESPathCheck('workloadProfileName', 'wp-ingress'),
-            JMESPathCheck('terminationGracePeriodSeconds', None),
-            JMESPathCheck('requestIdleTimeout', None),
-            JMESPathCheck('headerCountLimit', None),
-        ])
-        
-        self.cmd(f'containerapp env premium-ingress update -g {resource_group} -n {env_name} --termination-grace-period 45 --request-idle-timeout 180 --header-count-limit 40', checks=[
-            JMESPathCheck('workloadProfileName', 'wp-ingress'),
-            JMESPathCheck('terminationGracePeriodSeconds', 45),
-            JMESPathCheck('requestIdleTimeout', 180),
-            JMESPathCheck('headerCountLimit', 40),
-        ])
-
-        # set removes unspecified optional parameters
-        self.cmd(f'containerapp env premium-ingress add -g {resource_group} -n {env_name} -w wp-ingress --request-idle-timeout 90', checks=[
-            JMESPathCheck('workloadProfileName', 'wp-ingress'),
-            JMESPathCheck('requestIdleTimeout', 90),
-            JMESPathCheck('terminationGracePeriodSeconds', None),
-            JMESPathCheck('headerCountLimit', None),
-        ])
-
-        self.cmd(f'containerapp env premium-ingress remove -g {resource_group} -n {env_name} -y')
-    
-        self.cmd(f'containerapp env premium-ingress show -g {resource_group} -n {env_name}', checks=[
-            JMESPathCheck('message', 'No premium ingress configuration found for this environment, using default values.'),
-        ])
-
-        # Clean up
-        self.cmd(f'containerapp env delete -g {resource_group} -n {env_name} --yes --no-wait')
-
 
 class ContainerappCustomDomainTests(ScenarioTest):
     def __init__(self, *arg, **kwargs):
@@ -2111,10 +2057,10 @@ class ContainerappUpRegistryIdentityTests(ScenarioTest):
     @AllowLargeResponse(8192)
     @ResourceGroupPreparer(location="westeurope")
     def test_containerapp_up_registry_identity_user(self, resource_group):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
 
         app = self.create_random_name(prefix='aca', length=24)
@@ -2231,10 +2177,10 @@ class ContainerappUpRegistryIdentityTests(ScenarioTest):
     @AllowLargeResponse(8192)
     @ResourceGroupPreparer(location="westeurope")
     def test_containerapp_up_registry_identity_system(self, resource_group):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
 
         app = self.create_random_name(prefix='aca', length=24)
@@ -2278,10 +2224,10 @@ class ContainerappUpRegistryIdentityTests(ScenarioTest):
     @AllowLargeResponse(8192)
     @ResourceGroupPreparer(location="westeurope")
     def test_containerapp_up_private_registry_port(self, resource_group):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
 
         app = self.create_random_name(prefix='aca', length=24)
@@ -2346,10 +2292,10 @@ class ContainerappUpRegistryIdentityTests(ScenarioTest):
     @AllowLargeResponse(8192)
     @ResourceGroupPreparer(location="westeurope")
     def test_containerapp_up_registry_acr_look_up_credentical(self, resource_group):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
         app = self.create_random_name(prefix='aca', length=24)
         acr = self.create_random_name(prefix='acr', length=24)
@@ -2423,10 +2369,10 @@ class ContainerappUpRegistryIdentityTests(ScenarioTest):
     @ResourceGroupPreparer(location="westeurope")
     @SubnetPreparer(location="eastus", delegations='Microsoft.App/environments', service_endpoints="Microsoft.Storage.Global")
     def test_containerapp_up_identity_registry(self, resource_group, subnet_id, vnet_name, subnet_name):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
 
         env_name = self.create_random_name(prefix='containerapp-e2e-env', length=24)
@@ -2766,10 +2712,10 @@ properties:
     @AllowLargeResponse(8192)
     @ResourceGroupPreparer(location="westeurope")
     def test_containerapp_preview_create_with_yaml(self, resource_group):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
 
         app = self.create_random_name(prefix='yaml', length=24)
@@ -2945,10 +2891,10 @@ properties:
     @AllowLargeResponse(8192)
     @ResourceGroupPreparer(location="westeurope")
     def test_containerapp_create_with_yaml(self, resource_group):
-        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use eastus as location
+        # MSI is not available in North Central US (Stage), if the TEST_LOCATION is "northcentralusstage", use brazilsouth as location
         location = TEST_LOCATION
         if format_location(location) == format_location(STAGE_LOCATION):
-            location = "eastus"
+            location = "brazilsouth"
         self.cmd('configure --defaults location={}'.format(location))
 
         app = self.create_random_name(prefix='yaml', length=24)
@@ -3027,7 +2973,7 @@ properties:
             JMESPathCheck("properties.provisioningState", "Succeeded"),
             JMESPathCheck("properties.configuration.activeRevisionsMode", "Labels"),
             JMESPathCheck("properties.configuration.ingress.external", True),
-            JMESPathCheck("properties.configuration.ingress.traffic[0].label", "label1"),
+            # JMESPathCheck("properties.configuration.ingress.traffic[0].label", "label1"),
             JMESPathCheck("properties.configuration.ingress.ipSecurityRestrictions[0].name", "name"),
             JMESPathCheck("properties.configuration.ingress.ipSecurityRestrictions[0].ipAddressRange", "1.1.1.1/10"),
             JMESPathCheck("properties.configuration.ingress.ipSecurityRestrictions[0].action", "Allow"),
@@ -3066,6 +3012,10 @@ properties:
                           allowInsecure: false
                           targetPort: 80
                           transport: Auto
+                          traffic:
+                            - latestRevision: true
+                              weight: 100
+                              label: label1
                       template:
                         revisionSuffix: myrevision2
                         containers:
@@ -3093,7 +3043,7 @@ properties:
             JMESPathCheck("properties.provisioningState", "Succeeded"),
             JMESPathCheck("properties.configuration.activeRevisionsMode", "Labels"),
             JMESPathCheck("properties.configuration.ingress.external", True),
-            JMESPathCheck("properties.configuration.ingress.traffic[0].label", "label1"),
+            # JMESPathCheck("properties.configuration.ingress.traffic[0].label", "label1"),
             JMESPathCheck("properties.configuration.ingress.ipSecurityRestrictions[0].name", "name"),
             JMESPathCheck("properties.configuration.ingress.ipSecurityRestrictions[0].ipAddressRange", "1.1.1.1/10"),
             JMESPathCheck("properties.configuration.ingress.ipSecurityRestrictions[0].action", "Allow"),

@@ -17,7 +17,7 @@ import shutil
 from subprocess import CalledProcessError, check_call, check_output
 
 import service_name
-from pkg_resources import parse_version
+from packaging.version import Version
 from util import get_ext_metadata
 
 logger = logging.getLogger(__name__)
@@ -114,9 +114,9 @@ class AzdevExtensionHelper:
             raise ValueError(f"Underscores `_` are not allowed in the extension root directory, "
                              f"please change it to a hyphen `-`.")
         if metadata['name'] != extension_name:
-            raise ValueError(f"The name {metadata['name']} in setup.py "
+            raise ValueError(f"The name {metadata['name']} declared in pyproject.toml/setup.py "
                              f"is not the same as the extension name {extension_name}! \n"
-                             f"Please fix the name in setup.py!")
+                             f"Please fix the name in pyproject.toml/setup.py!")
 
 
 def find_modified_files_against_master_branch():
@@ -162,7 +162,8 @@ def contain_extension_code(files):
         if 'src/' in file and os.path.isfile(file) and os.path.isdir(os.path.dirname(file)):
             new_extension_home = os.path.dirname(file)
 
-            if os.path.isfile(os.path.join(new_extension_home, 'setup.py')):
+            # Accept both while extensions are migrating to pyproject.toml.
+            if os.path.isfile(os.path.join(new_extension_home, 'pyproject.toml')) or os.path.isfile(os.path.join(new_extension_home, 'setup.py')):
                 return True
 
     return False
@@ -179,8 +180,27 @@ def azdev_on_external_extension(index_json, azdev_type):
     with open(index_json, 'r') as fd:
         current_extensions = json.loads(fd.read()).get("extensions")
 
+    def entry_equals_ignore_url(entry1, entry2):
+        """Compare two entries ignoring downloadUrl field"""
+        entry1_copy = entry1.copy()
+        entry2_copy = entry2.copy()
+        entry1_copy.pop('downloadUrl', None)
+        entry2_copy.pop('downloadUrl', None)
+        return entry1_copy == entry2_copy
+
     for name in current_extensions:
-        modified_entries = [entry for entry in current_extensions[name] if entry not in public_extensions.get(name, [])]
+        public_entries = public_extensions.get(name, [])
+
+        # Find modified entries by comparing without downloadUrl
+        modified_entries = []
+        for entry in current_extensions[name]:
+            is_modified = True
+            for public_entry in public_entries:
+                if entry_equals_ignore_url(entry, public_entry):
+                    is_modified = False
+                    break
+            if is_modified:
+                modified_entries.append(entry)
 
         if not modified_entries:
             continue
@@ -191,7 +211,7 @@ def azdev_on_external_extension(index_json, azdev_type):
 
         separator_line()
 
-        latest_entry = max(modified_entries, key=lambda c: parse_version(c['metadata']['version']))
+        latest_entry = max(modified_entries, key=lambda c: Version(c['metadata']['version']))
 
         az_extension = AzExtensionHelper(name)
         az_extension.add_from_url(latest_entry['downloadUrl'])
@@ -204,7 +224,7 @@ def azdev_on_external_extension(index_json, azdev_type):
         # azdev test support external extension
         # azdev_extension.style()
 
-        logger.info('Checking service name for external extensions')
+        logger.info('Checking service name for external extensions: %s', name)
         service_name.check()
 
         az_extension.remove()
@@ -245,7 +265,7 @@ def azdev_on_internal_extension(modified_files, azdev_type):
                 logger.error(statement_msg)
                 exit(1)
 
-        logger.info('Checking service name for internal extensions')
+        logger.info('Checking service name for internal extensions: %s', name)
         service_name.check()
 
         azdev_extension.remove()

@@ -33,6 +33,15 @@ from azure.cli.core.commands.parameters import (
     tags_type,
     zones_type,
 )
+from azure.cli.core.commands.validators import validate_file_or_dict
+from azext_aks_preview._validators import (
+    validate_nat_gateway_managed_outbound_ipv6_count,
+    validate_nat_gateway_v2_params,
+    validate_nat_gateway_v2_params_for_update,
+    validate_outbound_type_sku,
+    validate_outbound_type_sku_for_update,
+    validate_action_group_id,
+)
 from azext_aks_preview._client_factory import CUSTOM_MGMT_AKS_PREVIEW
 from azext_aks_preview._completers import (
     get_k8s_upgrades_completion_list,
@@ -54,8 +63,6 @@ from azext_aks_preview._consts import (
     CONST_CREDENTIAL_FORMAT_AZURE,
     CONST_CREDENTIAL_FORMAT_EXEC,
     CONST_DAILY_MAINTENANCE_SCHEDULE,
-    CONST_DISK_DRIVER_V1,
-    CONST_DISK_DRIVER_V2,
     CONST_GPU_DRIVER_INSTALL,
     CONST_GPU_DRIVER_NONE,
     CONST_GPU_INSTANCE_PROFILE_MIG1_G,
@@ -65,6 +72,8 @@ from azext_aks_preview._consts import (
     CONST_GPU_INSTANCE_PROFILE_MIG7_G,
     CONST_LOAD_BALANCER_SKU_BASIC,
     CONST_LOAD_BALANCER_SKU_STANDARD,
+    CONST_BASTION_SKU_STANDARD,
+    CONST_BASTION_SKU_PREMIUM,
     CONST_MANAGED_CLUSTER_SKU_TIER_FREE,
     CONST_MANAGED_CLUSTER_SKU_TIER_STANDARD,
     CONST_MANAGED_CLUSTER_SKU_TIER_PREMIUM,
@@ -76,6 +85,9 @@ from azext_aks_preview._consts import (
     CONST_NETWORK_PLUGIN_NONE,
     CONST_NETWORK_POD_IP_ALLOCATION_MODE_DYNAMIC_INDIVIDUAL,
     CONST_NETWORK_POD_IP_ALLOCATION_MODE_STATIC_BLOCK,
+    CONST_NODE_DISRUPTION_POLICY_ALLOW,
+    CONST_NODE_DISRUPTION_POLICY_BLOCK,
+    CONST_NODE_DISRUPTION_POLICY_ALLOW_DURING_MAINTENANCE_WINDOW,
     CONST_NODE_IMAGE_UPGRADE_CHANNEL,
     CONST_NODE_OS_CHANNEL_NODE_IMAGE,
     CONST_NODE_OS_CHANNEL_NONE,
@@ -93,13 +105,19 @@ from azext_aks_preview._consts import (
     CONST_OS_DISK_TYPE_MANAGED,
     CONST_OS_SKU_AZURELINUX,
     CONST_OS_SKU_AZURELINUX3,
+    CONST_OS_SKU_FLATCAR,
     CONST_OS_SKU_CBLMARINER,
     CONST_OS_SKU_MARINER,
+    CONST_OS_SKU_AZURELINUXOSGUARD,
+    CONST_OS_SKU_AZURELINUX3OSGUARD,
+    CONST_OS_SKU_AZURECONTAINERLINUX,
     CONST_OS_SKU_UBUNTU,
     CONST_OS_SKU_UBUNTU2204,
     CONST_OS_SKU_UBUNTU2404,
+    CONST_OS_SKU_UBUNTU2604,
     CONST_OS_SKU_WINDOWS2019,
     CONST_OS_SKU_WINDOWS2022,
+    CONST_OS_SKU_WINDOWS2025,
     CONST_OS_SKU_WINDOWSANNUAL,
     CONST_PATCH_UPGRADE_CHANNEL,
     CONST_RAPID_UPGRADE_CHANNEL,
@@ -123,7 +141,8 @@ from azext_aks_preview._consts import (
     CONST_WEEKINDEX_SECOND,
     CONST_WEEKINDEX_THIRD,
     CONST_WEEKLY_MAINTENANCE_SCHEDULE,
-    CONST_WORKLOAD_RUNTIME_KATA_MSHV_VM_ISOLATION,
+    CONST_WORKLOAD_RUNTIME_KATA_VM_ISOLATION,
+    CONST_WORKLOAD_RUNTIME_OLD_KATA_VM_ISOLATION,
     CONST_WORKLOAD_RUNTIME_KATA_CC_ISOLATION,
     CONST_WORKLOAD_RUNTIME_OCI_CONTAINER,
     CONST_WORKLOAD_RUNTIME_WASM_WASI,
@@ -135,23 +154,32 @@ from azext_aks_preview._consts import (
     CONST_MANAGED_CLUSTER_SKU_NAME_AUTOMATIC,
     CONST_SSH_ACCESS_LOCALUSER,
     CONST_SSH_ACCESS_DISABLED,
+    CONST_SSH_ACCESS_ENTRAID,
     CONST_CLUSTER_SERVICE_HEALTH_PROBE_MODE_SERVICE_NODE_PORT,
     CONST_CLUSTER_SERVICE_HEALTH_PROBE_MODE_SHARED,
     CONST_ARTIFACT_SOURCE_DIRECT,
     CONST_ARTIFACT_SOURCE_CACHE,
     CONST_OUTBOUND_TYPE_NONE,
     CONST_OUTBOUND_TYPE_BLOCK,
+    CONST_OUTBOUND_TYPE_MANAGED_NAT_GATEWAY_V2,
+    CONST_NAT_GATEWAY_SKU_STANDARD,
+    CONST_NAT_GATEWAY_SKU_STANDARD_V2,
     CONST_APP_ROUTING_ANNOTATION_CONTROLLED_NGINX,
     CONST_APP_ROUTING_EXTERNAL_NGINX,
     CONST_APP_ROUTING_INTERNAL_NGINX,
     CONST_APP_ROUTING_NONE_NGINX,
     CONST_GPU_DRIVER_TYPE_CUDA,
     CONST_GPU_DRIVER_TYPE_GRID,
+    CONST_MANAGED_GPU_DRIVER_MODE_DRA,
+    CONST_MANAGED_GPU_DRIVER_MODE_DEVICE_PLUGIN,
+    CONST_GPU_MIG_STRATEGY_SINGLE,
+    CONST_GPU_MIG_STRATEGY_MIXED,
     CONST_ADVANCED_NETWORKPOLICIES_NONE,
     CONST_ADVANCED_NETWORKPOLICIES_FQDN,
     CONST_ADVANCED_NETWORKPOLICIES_L7,
     CONST_TRANSIT_ENCRYPTION_TYPE_NONE,
     CONST_TRANSIT_ENCRYPTION_TYPE_WIREGUARD,
+    CONST_TRANSIT_ENCRYPTION_TYPE_MTLS,
     CONST_ACNS_DATAPATH_ACCELERATION_MODE_BPFVETH,
     CONST_ACNS_DATAPATH_ACCELERATION_MODE_NONE,
     CONST_UPGRADE_STRATEGY_ROLLING,
@@ -172,9 +200,14 @@ from azext_aks_preview._validators import (
     validate_assign_kubelet_identity,
     validate_azure_keyvault_kms_key_id,
     validate_azure_keyvault_kms_key_vault_resource_id,
+    validate_azure_monitor_and_opentelemetry_for_create,
+    validate_azure_monitor_and_opentelemetry_for_update,
+    validate_azure_monitor_logs_and_enable_addons,
+    validate_azure_monitor_logs_enable_disable,
     validate_azuremonitorworkspaceresourceid,
     validate_cluster_id,
     validate_cluster_snapshot_id,
+    validate_capacity_reservation_group,
     validate_create_parameters,
     validate_crg_id,
     validate_custom_ca_trust_certificates,
@@ -182,7 +215,6 @@ from azext_aks_preview._validators import (
     validate_defender_disable_and_enable_parameters,
     validate_disable_windows_outbound_nat,
     validate_asm_egress_name,
-    validate_enable_custom_ca_trust,
     validate_eviction_policy,
     validate_grafanaresourceid,
     validate_host_group_id,
@@ -193,7 +225,9 @@ from azext_aks_preview._validators import (
     validate_load_balancer_sku,
     validate_max_surge,
     validate_message_of_the_day,
+    validate_node_public_ip_prefix_ids,
     validate_node_public_ip_tags,
+    validate_bastion_public_ip_id,
     validate_nodepool_id,
     validate_nodepool_labels,
     validate_nodepool_taints,
@@ -217,11 +251,15 @@ from azext_aks_preview._validators import (
     validate_start_time,
     validate_user,
     validate_utc_offset,
+    validate_duration_hours,
     validate_vm_set_type,
     validate_vnet_subnet_id,
+    validate_system_node_subnet_id,
+    validate_node_subnet_id,
     validate_force_upgrade_disable_and_enable_parameters,
     validate_azure_service_mesh_revision,
     validate_artifact_streaming,
+    validate_os_disk_full_caching,
     validate_custom_endpoints,
     validate_bootstrap_container_registry_resource_id,
     validate_gateway_prefix_size,
@@ -230,6 +268,7 @@ from azext_aks_preview._validators import (
     validate_drain_batch_size,
     validate_resource_group_parameter,
     validate_location_resource_group_cluster_parameters,
+    validate_prepared_image_specification_id,
 )
 from azext_aks_preview.azurecontainerstorage._consts import (
     CONST_ACSTOR_ALL,
@@ -258,6 +297,34 @@ from .action import (
 )
 
 from knack.arguments import CLIArgumentType
+from knack.deprecation import Deprecated
+
+
+class _SizedDeprecated(Deprecated):
+    """A Deprecated option that reports a length.
+
+    knack computes the preview target with sorted(options_list, key=len). A plain Deprecated
+    has no __len__, so combining is_preview=True with a deprecated option name raises
+    TypeError. Reporting the length of the option name keeps both status tags usable and
+    makes the longest (current) option name the preview target.
+    """
+
+    def __len__(self):
+        return len(self.target)
+
+
+def _deprecate_option(c, target, redirect):
+    """Deprecate a single option name and keep it compatible with is_preview.
+
+    Builds the Deprecated object through c.deprecate() so that the message, the object type
+    and the applicability checks stay identical to every other deprecated option, then only
+    adds the __len__ behaviour that knack needs for the preview tag.
+    """
+    deprecated = c.deprecate(target=target, redirect=redirect)
+    if deprecated is not None:
+        deprecated.__class__ = _SizedDeprecated
+    return deprecated
+
 
 # candidates for enumeration
 # consts for AgentPool
@@ -277,29 +344,43 @@ node_mode_types = [
 node_os_skus_create = [
     CONST_OS_SKU_AZURELINUX,
     CONST_OS_SKU_AZURELINUX3,
+    CONST_OS_SKU_FLATCAR,
     CONST_OS_SKU_UBUNTU,
     CONST_OS_SKU_CBLMARINER,
     CONST_OS_SKU_MARINER,
     CONST_OS_SKU_UBUNTU2204,
     CONST_OS_SKU_UBUNTU2404,
+    CONST_OS_SKU_UBUNTU2604,
+    CONST_OS_SKU_AZURELINUXOSGUARD,
+    CONST_OS_SKU_AZURELINUX3OSGUARD,
+    CONST_OS_SKU_AZURECONTAINERLINUX,
 ]
-node_os_skus = node_os_skus_create + [
+node_os_skus_add = node_os_skus_create + [
     CONST_OS_SKU_WINDOWS2019,
     CONST_OS_SKU_WINDOWS2022,
+    CONST_OS_SKU_WINDOWS2025,
     CONST_OS_SKU_WINDOWSANNUAL,
 ]
 node_os_skus_update = [
     CONST_OS_SKU_AZURELINUX,
     CONST_OS_SKU_AZURELINUX3,
+    CONST_OS_SKU_FLATCAR,
     CONST_OS_SKU_UBUNTU,
     CONST_OS_SKU_UBUNTU2204,
     CONST_OS_SKU_UBUNTU2404,
+    CONST_OS_SKU_UBUNTU2604,
+    CONST_OS_SKU_AZURELINUXOSGUARD,
+    CONST_OS_SKU_AZURELINUX3OSGUARD,
+    CONST_OS_SKU_AZURECONTAINERLINUX,
+    CONST_OS_SKU_WINDOWS2022,
+    CONST_OS_SKU_WINDOWS2025,
 ]
 scale_down_modes = [CONST_SCALE_DOWN_MODE_DELETE, CONST_SCALE_DOWN_MODE_DEALLOCATE]
 workload_runtimes = [
     CONST_WORKLOAD_RUNTIME_OCI_CONTAINER,
     CONST_WORKLOAD_RUNTIME_WASM_WASI,
-    CONST_WORKLOAD_RUNTIME_KATA_MSHV_VM_ISOLATION,
+    CONST_WORKLOAD_RUNTIME_KATA_VM_ISOLATION,
+    CONST_WORKLOAD_RUNTIME_OLD_KATA_VM_ISOLATION,
     CONST_WORKLOAD_RUNTIME_KATA_CC_ISOLATION,
 ]
 gpu_instance_profiles = [
@@ -343,20 +424,25 @@ advanced_networkpolicies = [
 transit_encryption_types = [
     CONST_TRANSIT_ENCRYPTION_TYPE_NONE,
     CONST_TRANSIT_ENCRYPTION_TYPE_WIREGUARD,
+    CONST_TRANSIT_ENCRYPTION_TYPE_MTLS,
 ]
 acns_datapath_acceleration_modes = [
     CONST_ACNS_DATAPATH_ACCELERATION_MODE_NONE,
     CONST_ACNS_DATAPATH_ACCELERATION_MODE_BPFVETH,
 ]
 network_dataplanes = [CONST_NETWORK_DATAPLANE_AZURE, CONST_NETWORK_DATAPLANE_CILIUM]
-disk_driver_versions = [CONST_DISK_DRIVER_V1, CONST_DISK_DRIVER_V2]
 outbound_types = [
     CONST_OUTBOUND_TYPE_LOAD_BALANCER,
     CONST_OUTBOUND_TYPE_USER_DEFINED_ROUTING,
     CONST_OUTBOUND_TYPE_MANAGED_NAT_GATEWAY,
+    CONST_OUTBOUND_TYPE_MANAGED_NAT_GATEWAY_V2,
     CONST_OUTBOUND_TYPE_USER_ASSIGNED_NAT_GATEWAY,
     CONST_OUTBOUND_TYPE_NONE,
     CONST_OUTBOUND_TYPE_BLOCK,
+]
+nat_gateway_skus = [
+    CONST_NAT_GATEWAY_SKU_STANDARD,
+    CONST_NAT_GATEWAY_SKU_STANDARD_V2,
 ]
 auto_upgrade_channels = [
     CONST_RAPID_UPGRADE_CHANNEL,
@@ -433,6 +519,12 @@ ingress_gateway_types = [
 ]
 
 # azure container storage
+# azure container storage
+container_storage_versions = [
+    "1",
+    "2"
+]
+
 storage_pool_types = [
     CONST_STORAGE_POOL_TYPE_AZURE_DISK,
     CONST_STORAGE_POOL_TYPE_EPHEMERAL_DISK,
@@ -491,6 +583,7 @@ node_provisioning_default_pools = [
 ssh_accesses = [
     CONST_SSH_ACCESS_LOCALUSER,
     CONST_SSH_ACCESS_DISABLED,
+    CONST_SSH_ACCESS_ENTRAID,
 ]
 
 health_probe_modes = [
@@ -516,9 +609,34 @@ gpu_driver_types = [
     CONST_GPU_DRIVER_TYPE_GRID,
 ]
 
+managed_gpu_driver_modes = [
+    CONST_MANAGED_GPU_DRIVER_MODE_DRA,
+    CONST_MANAGED_GPU_DRIVER_MODE_DEVICE_PLUGIN,
+]
+
+gpu_mig_strategies = [
+    CONST_GPU_MIG_STRATEGY_SINGLE,
+    CONST_GPU_MIG_STRATEGY_MIXED,
+]
+
 upgrade_strategies = [
     CONST_UPGRADE_STRATEGY_ROLLING,
     CONST_UPGRADE_STRATEGY_BLUE_GREEN,
+]
+
+bastion_skus = [
+    CONST_BASTION_SKU_STANDARD,
+    CONST_BASTION_SKU_PREMIUM,
+]
+
+# AKS backup strategy presets exposed by --backup-strategy.
+# NOTE: must mirror CONST_AKS_BACKUP_STRATEGIES in azext_dataprotection.manual._consts.
+aks_backup_strategies = ["Week", "Month", "DisasterRecovery", "Custom"]
+
+node_disruption_policies = [
+    CONST_NODE_DISRUPTION_POLICY_ALLOW,
+    CONST_NODE_DISRUPTION_POLICY_BLOCK,
+    CONST_NODE_DISRUPTION_POLICY_ALLOW_DURING_MAINTENANCE_WINDOW,
 ]
 
 
@@ -635,7 +753,49 @@ def load_arguments(self, _):
             type=int,
             validator=validate_nat_gateway_idle_timeout,
         )
-        c.argument("outbound_type", arg_type=get_enum_type(outbound_types))
+        c.argument(
+            "nat_gateway_managed_outbound_ipv6_count",
+            options_list=[
+                "--nat-gateway-managed-outbound-ipv6-count",
+                "--nat-gw-ipv6-count",
+            ],
+            type=int,
+            validator=validate_nat_gateway_managed_outbound_ipv6_count,
+            help="NAT gateway managed outbound IPv6 IP count. "
+                 "Valid only with --outbound-type managedNATGatewayV2.",
+        )
+        c.argument(
+            "nat_gateway_outbound_ip_ids",
+            options_list=[
+                "--nat-gateway-outbound-ips",
+                "--nat-gw-ips",
+            ],
+            help="Comma-separated public IP resource IDs for the "
+                 "cluster NAT gateway. V2 only.",
+        )
+        c.argument(
+            "nat_gateway_outbound_ip_prefix_ids",
+            options_list=[
+                "--nat-gateway-outbound-ip-prefixes",
+                "--nat-gw-prefixes",
+            ],
+            help="Comma-separated public IP prefix resource IDs "
+                 "for the cluster NAT gateway. V2 only.",
+        )
+        c.argument(
+            "nat_gateway_sku",
+            options_list=["--outbound-type-sku"],
+            arg_type=get_enum_type(nat_gateway_skus),
+            validator=validate_outbound_type_sku,
+            help="SKU of the managed NAT Gateway: Standard or StandardV2. Only valid with "
+                 "--outbound-type managedNATGateway. Omit to default to StandardV2 where the "
+                 "region supports it.",
+        )
+        c.argument(
+            "outbound_type",
+            arg_type=get_enum_type(outbound_types),
+            validator=validate_nat_gateway_v2_params,
+        )
         c.argument("network_plugin", arg_type=get_enum_type(network_plugins))
         c.argument("network_plugin_mode", arg_type=get_enum_type(network_plugin_modes))
         c.argument("network_policy")
@@ -691,7 +851,6 @@ def load_arguments(self, _):
         c.argument("k8s_support_plan", arg_type=get_enum_type(k8s_support_plans))
         c.argument("enable_defender", action="store_true")
         c.argument("defender_config", validator=validate_defender_config_parameter)
-        c.argument("disk_driver_version", arg_type=get_enum_type(disk_driver_versions))
         c.argument("disable_disk_driver", action="store_true")
         c.argument("disable_file_driver", action="store_true")
         c.argument("enable_blob_driver", action="store_true")
@@ -733,6 +892,12 @@ def load_arguments(self, _):
             options_list=["--enable-addons", "-a"],
             validator=validate_addons,
         )
+        c.argument(
+            "enable_azure_monitor_logs",
+            action="store_true",
+            validator=validate_azure_monitor_logs_and_enable_addons,
+            help="Enable Azure Monitor logs for the cluster. Equivalent to '--enable-addons monitoring'."
+        )
         c.argument("workspace_resource_id")
         c.argument(
             "enable_msi_auth_for_monitoring",
@@ -752,12 +917,14 @@ def load_arguments(self, _):
         c.argument("enable_secret_rotation", action="store_true")
         c.argument("rotation_poll_interval")
         c.argument("enable_sgxquotehelper", action="store_true")
+        c.argument("enable_application_load_balancer", action="store_true", is_preview=True)
         c.argument("enable_app_routing", action="store_true", is_preview=True)
         c.argument(
             "app_routing_default_nginx_controller",
             arg_type=get_enum_type(app_routing_nginx_configs),
             options_list=["--app-routing-default-nginx-controller", "--ardnc"]
         )
+        c.argument("enable_default_domain", action="store_true", is_preview=True)
         # nodepool paramerters
         c.argument(
             "nodepool_name",
@@ -785,6 +952,14 @@ def load_arguments(self, _):
         )
         c.argument("enable_node_public_ip", action="store_true")
         c.argument("node_public_ip_prefix_id")
+        c.argument(
+            "node_public_ip_prefix_ids",
+            validator=validate_node_public_ip_prefix_ids,
+            help="Comma-separated list of public IP prefix resource IDs for dual-stack node public IPs "
+                 "(IPv4 and/or IPv6). At most one IPv4 and one IPv6 prefix may be specified. "
+                 "Automatically enables --enable-node-public-ip. Cannot be used with --node-public-ip-prefix-id. "
+                 "Requires the NodePublicIPv6PrefixPreview feature flag to be registered.",
+        )
         c.argument("enable_cluster_autoscaler", action="store_true")
         c.argument("min_count", type=int, validator=validate_nodes_count)
         c.argument("max_count", type=int, validator=validate_nodes_count)
@@ -816,6 +991,13 @@ def load_arguments(self, _):
         )
         c.argument("node_osdisk_type", arg_type=get_enum_type(node_os_disk_types))
         c.argument("node_osdisk_size", type=int)
+        c.argument(
+            "enable_os_disk_full_caching",
+            options_list=["--enable-osdisk-full-caching", "--enable-osdisk-fc"],
+            action="store_true",
+            validator=validate_os_disk_full_caching,
+            is_preview=True,
+        )
         c.argument("max_pods", type=int, options_list=["--max-pods", "-m"])
         c.argument("vm_set_type", validator=validate_vm_set_type)
         c.argument(
@@ -834,6 +1016,8 @@ def load_arguments(self, _):
         c.argument("enable_encryption_at_host", action="store_true")
         c.argument("enable_ultra_ssd", action="store_true")
         c.argument("enable_fips_image", action="store_true")
+        c.argument("enable_fips", action="store_true", is_preview=True)
+        c.argument("enable_node_hardening", action="store_true", is_preview=True)
         c.argument("kubelet_config")
         c.argument("linux_os_config")
         c.argument("host_group_id", validator=validate_host_group_id)
@@ -865,6 +1049,8 @@ def load_arguments(self, _):
         )
         c.argument("revision", validator=validate_azure_service_mesh_revision)
         c.argument("image_cleaner_interval_hours", type=int)
+        c.argument("enable_service_account_image_pull", action="store_true", is_preview=True)
+        c.argument("service_account_image_pull_default_managed_identity_id", is_preview=True)
         c.argument(
             "cluster_snapshot_id",
             validator=validate_cluster_snapshot_id,
@@ -938,10 +1124,19 @@ def load_arguments(self, _):
             "acns_transit_encryption_type",
             is_preview=True,
             arg_type=get_enum_type(transit_encryption_types),
-            help="Specify the transit encryption type for ACNS. Available values are 'None' and 'WireGuard'.",
+            help="Specify the transit encryption type for ACNS. Available values are 'None', 'WireGuard', and 'mTLS'.",
         )
         c.argument(
             "enable_retina_flow_logs",
+            action="store_true",
+            deprecate_info=c.deprecate(
+                target="--enable-retina-flow-logs",
+                redirect="--enable-container-network-logs",
+                hide=True,
+            ),
+        )
+        c.argument(
+            "enable_container_network_logs",
             action="store_true",
         )
         c.argument(
@@ -959,8 +1154,6 @@ def load_arguments(self, _):
             arg_type=get_enum_type(workload_runtimes),
             default=CONST_WORKLOAD_RUNTIME_OCI_CONTAINER,
         )
-        # no validation for aks create because it already only supports Linux.
-        c.argument("enable_custom_ca_trust", action="store_true")
         c.argument(
             "nodepool_allowed_host_ports",
             validator=validate_allowed_host_ports,
@@ -1014,14 +1207,99 @@ def load_arguments(self, _):
         c.argument("ksm_metric_annotations_allow_list")
         c.argument("grafana_resource_id", validator=validate_grafanaresourceid)
         c.argument("enable_windows_recording_rules", action="store_true")
-        c.argument("enable_azure_monitor_app_monitoring", is_preview=True, action="store_true")
-        c.argument("enable_cost_analysis", action="store_true")
-        c.argument('enable_ai_toolchain_operator', is_preview=True, action='store_true')
+        c.argument(
+            "enable_control_plane_metrics",
+            options_list=["--enable-control-plane-metrics", "--enable-cp-metrics"],
+            action="store_true",
+            help=(
+                "Enable collection of Azure Monitor managed Prometheus control plane metrics for managed "
+                "cluster components (controlplane-apiserver and controlplane-etcd targets by default). "
+                "Requires Azure Monitor metrics to be enabled "
+                "(already enabled or via --enable-azure-monitor-metrics)."
+            ),
+        )
+        c.argument("enable_azure_monitor_app_monitoring",
+                   is_preview=True,
+                   action="store_true"
+                   )
+        # OpenTelemetry parameters
+        c.argument("enable_opentelemetry_metrics",
+                   is_preview=True,
+                   action="store_true",
+                   help="Enable OpenTelemetry metrics collection",
+                   validator=validate_azure_monitor_and_opentelemetry_for_create
+                   )
+        c.argument("opentelemetry_metrics_port",
+                   options_list=[
+                       "--opentelemetry-metrics-port-http",
+                       _deprecate_option(c, "--opentelemetry-metrics-port", "--opentelemetry-metrics-port-http"),
+                   ],
+                   is_preview=True,
+                   type=int,
+                   help="HTTP/protobuf port for OpenTelemetry metrics collection"
+                   )
+        c.argument("opentelemetry_metrics_port_grpc",
+                   options_list=["--opentelemetry-metrics-port-grpc"],
+                   is_preview=True,
+                   type=int,
+                   help="gRPC port for OpenTelemetry metrics collection"
+                   )
+        c.argument("disable_opentelemetry_metrics",
+                   is_preview=True,
+                   action="store_true",
+                   help="Disable OpenTelemetry metrics collection"
+                   )
+        c.argument("enable_opentelemetry_logs",
+                   options_list=[
+                       "--enable-opentelemetry-logs-traces",
+                       _deprecate_option(c, "--enable-opentelemetry-logs", "--enable-opentelemetry-logs-traces"),
+                   ],
+                   is_preview=True,
+                   action="store_true",
+                   help="Enable OpenTelemetry logs and traces collection"
+                   )
+        c.argument("opentelemetry_logs_port",
+                   options_list=[
+                       "--opentelemetry-logs-traces-port-http",
+                       _deprecate_option(c, "--opentelemetry-logs-port", "--opentelemetry-logs-traces-port-http"),
+                   ],
+                   is_preview=True,
+                   type=int,
+                   help="HTTP/protobuf port for OpenTelemetry logs and traces collection"
+                   )
+        c.argument("opentelemetry_logs_traces_port_grpc",
+                   options_list=["--opentelemetry-logs-traces-port-grpc"],
+                   is_preview=True,
+                   type=int,
+                   help="gRPC port for OpenTelemetry logs and traces collection"
+                   )
+        c.argument("disable_opentelemetry_logs",
+                   options_list=[
+                       "--disable-opentelemetry-logs-traces",
+                       _deprecate_option(c, "--disable-opentelemetry-logs", "--disable-opentelemetry-logs-traces"),
+                   ],
+                   is_preview=True,
+                   action="store_true",
+                   help="Disable OpenTelemetry logs and traces collection"
+                   )
+        c.argument("enable_cost_analysis",
+                   action="store_true"
+                   )
+        c.argument("enable_ai_toolchain_operator",
+                   is_preview=True,
+                   action="store_true"
+                   )
         # azure container storage
         c.argument(
             "enable_azure_container_storage",
-            arg_type=get_enum_type(storage_pool_types),
-            help="enable azure container storage and define storage pool type",
+            arg_type=_get_container_storage_enum_type(storage_pool_types),
+            help="enable azure container storage. Can be used as a flag (defaults to True) or with a"
+            " storage pool type value: (azureDisk, ephemeralDisk, elasticSan)",
+        )
+        c.argument(
+            "container_storage_version",
+            arg_type=get_enum_type(container_storage_versions),
+            help="set azure container storage version, the latest version will be installed by default",
         )
         c.argument(
             "storage_pool_name",
@@ -1074,6 +1352,12 @@ def load_arguments(self, _):
                 'by that action.'
             )
         )
+        c.argument(
+            "node_disruption_policy",
+            arg_type=get_enum_type(node_disruption_policies),
+            is_preview=True,
+            help="Set the node disruption policy for the cluster.",
+        )
         # in creation scenario, use "localuser" as default
         c.argument(
             'ssh_access',
@@ -1104,8 +1388,92 @@ def load_arguments(self, _):
         # virtual machines
         c.argument("vm_sizes", is_preview=True)
         c.argument("enable_imds_restriction", action="store_true", is_preview=True)
-        c.argument("enable_managed_system_pool", action="store_true", is_preview=True)
+        c.argument("enable_managed_system_pool",
+                   action="store_true",
+                   is_preview=True,
+                   deprecate_info=c.deprecate(target="--enable-managed-system-pool", hide=True))
         c.argument("enable_upstream_kubescheduler_user_configuration", action="store_true", is_preview=True)
+        c.argument(
+            "enable_gateway_api",
+            action="store_true",
+            help="Enable managed installation of Gateway API CRDs from the standard release channel."
+        )
+        c.argument(
+            "enable_app_routing_istio",
+            options_list=["--enable-app-routing-istio", "--enable-ari"],
+            action="store_true",
+            is_preview=True,
+            help="Enable Gateway API based ingress on App Routing via Istio"
+        )
+        c.argument("enable_hosted_system", action="store_true", is_preview=True)
+        c.argument(
+            "system_node_subnet_id",
+            validator=validate_system_node_subnet_id,
+            is_preview=True,
+        )
+        c.argument(
+            "node_subnet_id",
+            options_list=["--node-subnet-id"],
+            validator=validate_node_subnet_id,
+            is_preview=True,
+        )
+        c.argument(
+            "control_plane_scaling_size",
+            options_list=["--control-plane-scaling-size", "--cp-scaling-size"],
+            arg_type=get_enum_type(["H2", "H4", "H8"]),
+            is_preview=True,
+            help="The control plane scaling size. Provides scaled and performance-guaranteed control plane capacity. "
+                 "Available values are 'H2', 'H4', and 'H8'.",
+        )
+        c.argument(
+            "enable_continuous_control_plane_and_addon_monitor",
+            action="store_true",
+            is_preview=True,
+            help="Enable continuous control plane and addon monitor for the cluster.",
+        )
+        # Backup (delegates to the dataprotection extension)
+        c.argument(
+            "enable_backup",
+            action="store_true",
+            is_preview=True,
+            help="Enable Azure Backup for this AKS cluster. Orchestrates the same flow as "
+                 "'az dataprotection enable-backup trigger' (requires the 'dataprotection' extension). "
+                 "Implicitly waits for cluster creation to complete (ignores --no-wait).",
+        )
+        c.argument(
+            "backup_strategy",
+            arg_type=get_enum_type(aks_backup_strategies),
+            is_preview=True,
+            help="Backup strategy preset. Week (default, 7-day operational retention), Month "
+                 "(30-day operational retention), DisasterRecovery (7-day operational + 90-day vault "
+                 "retention), Custom (bring your own vault and policy via --backup-configuration). "
+                 "Only valid with --enable-backup.",
+        )
+        c.argument(
+            "backup_configuration_file",
+            options_list=["--backup-configuration"],
+            type=validate_file_or_dict,
+            is_preview=True,
+            help="Backup configuration as inline JSON string or @file.json. "
+                 "Supports storageAccountResourceId, blobContainerName, backupResourceGroupId, "
+                 "backupVaultId, backupPolicyId, tags. backupVaultId and backupPolicyId are required "
+                 "for Custom strategy. Only valid with --enable-backup.",
+        )
+        c.argument(
+            "enable_on_demand_monitor",
+            action="store_true",
+            is_preview=True,
+            help="Enable on-demand monitor for the cluster.",
+        )
+        # prepared image specification
+        c.argument(
+            'prepared_image_specification_id',
+            options_list=["--prepared-image-specification-id", "--pis-id"],
+            is_preview=True,
+            validator=validate_prepared_image_specification_id,
+            help='The resource ID of the prepared image specification to use for provisioning nodes in the default '
+                 'node pool.'
+        )
 
     with self.argument_context("aks update") as c:
         # managed cluster paramerters
@@ -1151,6 +1519,44 @@ def load_arguments(self, _):
             "nat_gateway_idle_timeout",
             type=int,
             validator=validate_nat_gateway_idle_timeout,
+        )
+        c.argument(
+            "nat_gateway_managed_outbound_ipv6_count",
+            options_list=[
+                "--nat-gateway-managed-outbound-ipv6-count",
+                "--nat-gw-ipv6-count",
+            ],
+            type=int,
+            validator=validate_nat_gateway_managed_outbound_ipv6_count,
+            help="NAT gateway managed outbound IPv6 IP count. "
+                 "Valid only with --outbound-type managedNATGatewayV2.",
+        )
+        c.argument(
+            "nat_gateway_outbound_ip_ids",
+            options_list=[
+                "--nat-gateway-outbound-ips",
+                "--nat-gw-ips",
+            ],
+            help="Comma-separated public IP resource IDs for the "
+                 "cluster NAT gateway. V2 only.",
+        )
+        c.argument(
+            "nat_gateway_outbound_ip_prefix_ids",
+            options_list=[
+                "--nat-gateway-outbound-ip-prefixes",
+                "--nat-gw-prefixes",
+            ],
+            help="Comma-separated public IP prefix resource IDs "
+                 "for the cluster NAT gateway. V2 only.",
+        )
+        c.argument(
+            "nat_gateway_sku",
+            options_list=["--outbound-type-sku"],
+            arg_type=get_enum_type(nat_gateway_skus),
+            validator=validate_outbound_type_sku_for_update,
+            help="SKU of the managed NAT Gateway: Standard or StandardV2. Only valid with "
+                 "--outbound-type managedNATGateway. Omit to default to StandardV2 where the "
+                 "region supports it.",
         )
         c.argument("network_dataplane", arg_type=get_enum_type(network_dataplanes))
         c.argument("network_policy")
@@ -1220,7 +1626,6 @@ def load_arguments(self, _):
         c.argument("enable_defender", action="store_true")
         c.argument("defender_config", validator=validate_defender_config_parameter)
         c.argument("enable_disk_driver", action="store_true")
-        c.argument("disk_driver_version", arg_type=get_enum_type(disk_driver_versions))
         c.argument("disable_disk_driver", action="store_true")
         c.argument("enable_file_driver", action="store_true")
         c.argument("disable_file_driver", action="store_true")
@@ -1241,6 +1646,11 @@ def load_arguments(self, _):
             "azure_keyvault_kms_key_vault_resource_id",
             validator=validate_azure_keyvault_kms_key_vault_resource_id,
         )
+        c.argument(
+            "kms_infrastructure_encryption",
+            arg_type=get_enum_type(["Enabled", "Disabled"]),
+            is_preview=True,
+        )
         c.argument("http_proxy_config")
         c.argument(
             "bootstrap_artifact_source",
@@ -1253,6 +1663,18 @@ def load_arguments(self, _):
             is_preview=True,
         )
         # addons
+        c.argument(
+            "enable_azure_monitor_logs",
+            action="store_true",
+            validator=validate_azure_monitor_logs_enable_disable,
+            help="Enable Azure Monitor logs for the cluster. Equivalent to 'az aks enable-addons -a monitoring'."
+        )
+# Monitoring parameters are inherited from base CLI
+        c.argument(
+            "disable_azure_monitor_logs",
+            action="store_true",
+            help="Disable Azure Monitor logs for the cluster. Equivalent to 'az aks disable-addons -a monitoring'."
+        )
         c.argument("enable_secret_rotation", action="store_true")
         c.argument("disable_secret_rotation", action="store_true")
         c.argument("rotation_poll_interval")
@@ -1313,7 +1735,11 @@ def load_arguments(self, _):
             validator=validate_ssh_key_for_update,
         )
         c.argument("load_balancer_managed_outbound_ipv6_count", type=int)
-        c.argument("outbound_type", arg_type=get_enum_type(outbound_types))
+        c.argument(
+            "outbound_type",
+            arg_type=get_enum_type(outbound_types),
+            validator=validate_nat_gateway_v2_params_for_update,
+        )
         c.argument("enable_pod_identity", action="store_true")
         c.argument("enable_pod_identity_with_kubenet", action="store_true")
         c.argument("disable_pod_identity", action="store_true")
@@ -1327,6 +1753,13 @@ def load_arguments(self, _):
         )
         c.argument("image_cleaner_interval_hours", type=int)
         c.argument("disable_image_integrity", action="store_true", is_preview=True)
+        c.argument("enable_fips", action="store_true", is_preview=True)
+        c.argument("disable_fips", action="store_true", is_preview=True)
+        c.argument("enable_node_hardening", action="store_true", is_preview=True)
+        c.argument("disable_node_hardening", action="store_true", is_preview=True)
+        c.argument("enable_service_account_image_pull", action="store_true", is_preview=True)
+        c.argument("disable_service_account_image_pull", action="store_true", is_preview=True)
+        c.argument("service_account_image_pull_default_managed_identity_id", is_preview=True)
         c.argument(
             "enable_apiserver_vnet_integration", action="store_true", is_preview=True
         )
@@ -1380,8 +1813,117 @@ def load_arguments(self, _):
             ),
         )
         c.argument("disable_azure_monitor_metrics", action="store_true")
-        c.argument("enable_azure_monitor_app_monitoring", action="store_true", is_preview=True)
-        c.argument("disable_azure_monitor_app_monitoring", action="store_true", is_preview=True)
+        c.argument(
+            "enable_control_plane_metrics",
+            options_list=["--enable-control-plane-metrics", "--enable-cp-metrics"],
+            action="store_true",
+            help=(
+                "Enable collection of Azure Monitor managed Prometheus control plane metrics for managed "
+                "cluster components (controlplane-apiserver and controlplane-etcd targets by default). "
+                "Requires Azure Monitor metrics to be enabled "
+                "(already enabled or via --enable-azure-monitor-metrics)."
+            ),
+        )
+        c.argument(
+            "disable_control_plane_metrics",
+            options_list=["--disable-control-plane-metrics", "--disable-cp-metrics"],
+            action="store_true",
+            help=(
+                "Disable collection of Azure Monitor managed Prometheus control plane metrics. "
+                "Sets azureMonitorProfile.metrics.controlPlane.enabled=false on the cluster."
+            ),
+        )
+        c.argument("enable_azure_monitor_app_monitoring",
+                   action="store_true",
+                   is_preview=True
+                   )
+        c.argument("disable_azure_monitor_app_monitoring",
+                   action="store_true",
+                   is_preview=True
+                   )
+        # Azure Monitor logs additional parameters
+        c.argument("workspace_resource_id",
+                   help="Resource ID of the Azure Log Analytics workspace to use for monitoring")
+        c.argument(
+            "enable_msi_auth_for_monitoring",
+            arg_type=get_three_state_flag(),
+            is_preview=True,
+            help="Enable managed identity authentication for Azure Monitor logs"
+        )
+        c.argument("enable_syslog",
+                   arg_type=get_three_state_flag(),
+                   is_preview=True,
+                   help="Enable syslog collection for Azure Monitor logs")
+        c.argument("data_collection_settings",
+                   is_preview=True,
+                   help="Data collection settings for Azure Monitor logs")
+        c.argument("enable_high_log_scale_mode",
+                   arg_type=get_three_state_flag(),
+                   is_preview=True,
+                   help="Enable high log scale mode for Azure Monitor logs")
+        c.argument("ampls_resource_id",
+                   is_preview=True,
+                   help="Resource ID of the Azure Monitor Private Link Scope to associate with the cluster")
+        # OpenTelemetry parameters
+        c.argument("enable_opentelemetry_metrics",
+                   is_preview=True,
+                   action="store_true",
+                   help="Enable OpenTelemetry metrics collection",
+                   validator=validate_azure_monitor_and_opentelemetry_for_update
+                   )
+        c.argument("opentelemetry_metrics_port",
+                   options_list=[
+                       "--opentelemetry-metrics-port-http",
+                       _deprecate_option(c, "--opentelemetry-metrics-port", "--opentelemetry-metrics-port-http"),
+                   ],
+                   is_preview=True,
+                   type=int,
+                   help="HTTP/protobuf port for OpenTelemetry metrics collection"
+                   )
+        c.argument("opentelemetry_metrics_port_grpc",
+                   options_list=["--opentelemetry-metrics-port-grpc"],
+                   is_preview=True,
+                   type=int,
+                   help="gRPC port for OpenTelemetry metrics collection"
+                   )
+        c.argument("disable_opentelemetry_metrics",
+                   is_preview=True,
+                   action="store_true",
+                   help="Disable OpenTelemetry metrics collection"
+                   )
+        c.argument("enable_opentelemetry_logs",
+                   options_list=[
+                       "--enable-opentelemetry-logs-traces",
+                       _deprecate_option(c, "--enable-opentelemetry-logs", "--enable-opentelemetry-logs-traces"),
+                   ],
+                   is_preview=True,
+                   action="store_true",
+                   help="Enable OpenTelemetry logs and traces collection"
+                   )
+        c.argument("opentelemetry_logs_port",
+                   options_list=[
+                       "--opentelemetry-logs-traces-port-http",
+                       _deprecate_option(c, "--opentelemetry-logs-port", "--opentelemetry-logs-traces-port-http"),
+                   ],
+                   is_preview=True,
+                   type=int,
+                   help="HTTP/protobuf port for OpenTelemetry logs and traces collection"
+                   )
+        c.argument("opentelemetry_logs_traces_port_grpc",
+                   options_list=["--opentelemetry-logs-traces-port-grpc"],
+                   is_preview=True,
+                   type=int,
+                   help="gRPC port for OpenTelemetry logs and traces collection"
+                   )
+        c.argument("disable_opentelemetry_logs",
+                   options_list=[
+                       "--disable-opentelemetry-logs-traces",
+                       _deprecate_option(c, "--disable-opentelemetry-logs", "--disable-opentelemetry-logs-traces"),
+                   ],
+                   is_preview=True,
+                   action="store_true",
+                   help="Disable OpenTelemetry logs and traces collection"
+                   )
         c.argument(
             "enable_vpa",
             action="store_true",
@@ -1463,14 +2005,32 @@ def load_arguments(self, _):
             "acns_transit_encryption_type",
             is_preview=True,
             arg_type=get_enum_type(transit_encryption_types),
-            help="Specify the transit encryption type for ACNS. Available values are 'None' and 'WireGuard'.",
+            help="Specify the transit encryption type for ACNS. Available values are 'None', 'WireGuard', and 'mTLS'.",
         )
         c.argument(
             "enable_retina_flow_logs",
             action="store_true",
+            deprecate_info=c.deprecate(
+                target="--enable-retina-flow-logs",
+                redirect="--enable-container-network-logs",
+                hide=True,
+            ),
+        )
+        c.argument(
+            "enable_container_network_logs",
+            action="store_true",
         )
         c.argument(
             "disable_retina_flow_logs",
+            action="store_true",
+            deprecate_info=c.deprecate(
+                target="--disable-retina-flow-logs",
+                redirect="--disable-container-network-logs",
+                hide=True,
+            ),
+        )
+        c.argument(
+            "disable_container_network_logs",
             action="store_true",
         )
         c.argument("enable_cost_analysis", action="store_true")
@@ -1480,13 +2040,21 @@ def load_arguments(self, _):
         # azure container storage
         c.argument(
             "enable_azure_container_storage",
-            arg_type=get_enum_type(storage_pool_types),
-            help="enable azure container storage and define storage pool type",
+            arg_type=_get_container_storage_enum_type(storage_pool_types),
+            help="enable azure container storage. Can be used as a flag (defaults to True) or with a"
+            " storage pool type value: (azureDisk, ephemeralDisk, elasticSan)",
         )
         c.argument(
             "disable_azure_container_storage",
-            arg_type=get_enum_type(disable_storage_pool_types),
-            help="disable azure container storage or any one of the storage pool types",
+            arg_type=_get_container_storage_enum_type(disable_storage_pool_types),
+            help="disable azure container storage or any one of the storage pool types."
+            " Can be used as a flag (defaults to True) or with a storagepool type value:"
+            " azureDisk, ephemeralDisk, elasticSan, all (to disable all storage pools).",
+        )
+        c.argument(
+            "container_storage_version",
+            arg_type=get_enum_type(container_storage_versions),
+            help="set azure container storage version, the latest version will be installed by default",
         )
         c.argument(
             "storage_pool_name",
@@ -1559,6 +2127,125 @@ def load_arguments(self, _):
         c.argument("enable_http_proxy", action="store_true", is_preview=True)
         c.argument("enable_upstream_kubescheduler_user_configuration", action="store_true", is_preview=True)
         c.argument("disable_upstream_kubescheduler_user_configuration", action="store_true", is_preview=True)
+        c.argument(
+            "enable_gateway_api",
+            action="store_true",
+            help="Enable managed installation of Gateway API CRDs from the standard release channel."
+        )
+        c.argument(
+            "disable_gateway_api",
+            action="store_true",
+            help="Disable managed installation of Gateway API CRDs."
+        )
+        c.argument(
+            "enable_app_routing_istio",
+            options_list=["--enable-app-routing-istio", "--enable-ari"],
+            action="store_true",
+            is_preview=True,
+            help="Enable Gateway API based ingress on App Routing via Istio."
+        )
+        c.argument(
+            "disable_app_routing_istio",
+            options_list=["--disable-app-routing-istio", "--disable-ari"],
+            action="store_true",
+            is_preview=True,
+            help="Disable Gateway API based ingress on App Routing via Istio."
+        )
+        c.argument(
+            "enable_application_load_balancer",
+            action="store_true",
+            is_preview=True,
+            help="Enable Application Load Balancer (Application Gateway for Containers)."
+        )
+        c.argument(
+            "disable_application_load_balancer",
+            action="store_true",
+            is_preview=True,
+            help="Disable Application Load Balancer (Application Gateway for Containers)."
+        )
+        c.argument(
+            "enable_continuous_control_plane_and_addon_monitor",
+            action="store_true",
+            is_preview=True,
+            help="Enable continuous control plane and addon monitor for the cluster.",
+        )
+        c.argument(
+            "enable_on_demand_monitor",
+            action="store_true",
+            is_preview=True,
+            help="Enable on-demand monitor for the cluster.",
+        )
+        c.argument(
+            "disable_on_demand_monitor",
+            action="store_true",
+            is_preview=True,
+            help="Disable on-demand monitor for the cluster.",
+        )
+        c.argument(
+            "disable_continuous_control_plane_and_addon_monitor",
+            action="store_true",
+            is_preview=True,
+            help="Disable continuous control plane and addon monitor for the cluster.",
+        )
+        # Backup (delegates to the dataprotection extension)
+        c.argument(
+            "enable_backup",
+            action="store_true",
+            is_preview=True,
+            help="Enable Azure Backup for this AKS cluster. Orchestrates the same flow as "
+                 "'az dataprotection enable-backup trigger' (requires the 'dataprotection' extension).",
+        )
+        c.argument(
+            "backup_strategy",
+            arg_type=get_enum_type(aks_backup_strategies),
+            is_preview=True,
+            help="Backup strategy preset. Week (default, 7-day operational retention), Month "
+                 "(30-day operational retention), DisasterRecovery (7-day operational + 90-day vault "
+                 "retention), Custom (bring your own vault and policy via --backup-configuration). "
+                 "Only valid with --enable-backup.",
+        )
+        c.argument(
+            "backup_configuration_file",
+            options_list=["--backup-configuration"],
+            type=validate_file_or_dict,
+            is_preview=True,
+            help="Backup configuration as inline JSON string or @file.json. "
+                 "Supports storageAccountResourceId, blobContainerName, backupResourceGroupId, "
+                 "backupVaultId, backupPolicyId, tags. backupVaultId and backupPolicyId are required "
+                 "for Custom strategy. Only valid with --enable-backup.",
+        )
+        c.argument(
+            "control_plane_scaling_size",
+            options_list=["--control-plane-scaling-size", "--cp-scaling-size"],
+            arg_type=get_enum_type(["H2", "H4", "H8"]),
+            is_preview=True,
+            help="The control plane scaling size. Provides scaled and performance-guaranteed control plane capacity. "
+                 "Available values are 'H2', 'H4', and 'H8'. "
+                 "The control plane scaling profile must already be enabled on the cluster.",
+        )
+        c.argument(
+            "node_disruption_policy",
+            arg_type=get_enum_type(node_disruption_policies),
+            is_preview=True,
+            help="Set the node disruption policy for the cluster.",
+        )
+        c.argument("enable_hosted_system", action="store_true", is_preview=True)
+        c.argument(
+            "system_node_subnet_id",
+            validator=validate_system_node_subnet_id,
+            is_preview=True,
+        )
+        c.argument(
+            "node_subnet_id",
+            options_list=["--node-subnet-id"],
+            validator=validate_node_subnet_id,
+            is_preview=True,
+        )
+
+    with self.argument_context("aks delete") as c:
+        c.argument("if_match")
+        c.argument("if_none_match")
+        c.argument("ignore_pod_disruption_budget", action="store_true")
 
     with self.argument_context("aks upgrade") as c:
         c.argument("kubernetes_version", completer=get_k8s_upgrades_completion_list)
@@ -1579,6 +2266,8 @@ def load_arguments(self, _):
             validator=validate_force_upgrade_disable_and_enable_parameters
         )
         c.argument('upgrade_override_until')
+        c.argument("k8s_support_plan", arg_type=get_enum_type(k8s_support_plans))
+        c.argument("tier", arg_type=get_enum_type(sku_tiers), validator=validate_sku_tier)
 
     with self.argument_context("aks scale") as c:
         c.argument(
@@ -1669,7 +2358,7 @@ def load_arguments(self, _):
         )
         c.argument("os_type")
         c.argument(
-            "os_sku", arg_type=get_enum_type(node_os_skus), validator=validate_os_sku
+            "os_sku", arg_type=get_enum_type(node_os_skus_add), validator=validate_os_sku
         )
         c.argument("snapshot_id", validator=validate_snapshot_id)
         c.argument("vnet_subnet_id", validator=validate_vnet_subnet_id)
@@ -1681,6 +2370,14 @@ def load_arguments(self, _):
         )
         c.argument("enable_node_public_ip", action="store_true")
         c.argument("node_public_ip_prefix_id")
+        c.argument(
+            "node_public_ip_prefix_ids",
+            validator=validate_node_public_ip_prefix_ids,
+            help="Comma-separated list of public IP prefix resource IDs for dual-stack node public IPs "
+                 "(IPv4 and/or IPv6). At most one IPv4 and one IPv6 prefix may be specified. "
+                 "Automatically enables --enable-node-public-ip. Cannot be used with --node-public-ip-prefix-id. "
+                 "Requires the NodePublicIPv6PrefixPreview feature flag to be registered.",
+        )
         c.argument(
             "enable_cluster_autoscaler",
             options_list=["--enable-cluster-autoscaler", "-e"],
@@ -1704,6 +2401,13 @@ def load_arguments(self, _):
         c.argument("node_taints", validator=validate_nodepool_taints)
         c.argument("node_osdisk_type", arg_type=get_enum_type(node_os_disk_types))
         c.argument("node_osdisk_size", type=int)
+        c.argument(
+            "enable_os_disk_full_caching",
+            options_list=["--enable-osdisk-full-caching", "--enable-osdisk-fc"],
+            action="store_true",
+            validator=validate_os_disk_full_caching,
+            is_preview=True,
+        )
         # upgrade strategy
         c.argument("upgrade_strategy", arg_type=get_enum_type(upgrade_strategies))
         # rolling upgrade params
@@ -1749,11 +2453,6 @@ def load_arguments(self, _):
             default=CONST_WORKLOAD_RUNTIME_OCI_CONTAINER,
         )
         c.argument(
-            "enable_custom_ca_trust",
-            action="store_true",
-            validator=validate_enable_custom_ca_trust,
-        )
-        c.argument(
             "disable_windows_outbound_nat",
             action="store_true",
             validator=validate_disable_windows_outbound_nat,
@@ -1769,6 +2468,19 @@ def load_arguments(self, _):
             action="store_true",
             validator=validate_artifact_streaming,
             is_preview=True,
+        )
+        c.argument(
+            "enable_managed_gpu",
+            arg_type=get_three_state_flag(),
+            is_preview=True,
+            help="Enable the Managed GPU experience.",
+        )
+        c.argument(
+            "managed_gpu_driver_mode",
+            options_list=["--managed-gpu-driver-mode", "--gpu-driver-mode"],
+            arg_type=get_enum_type(managed_gpu_driver_modes),
+            is_preview=True,
+            help="Specify the Managed GPU driver mode. Allowed values: DRA, DevicePlugin. The default is DevicePlugin. Requires --enable-managed-gpu to be set to true.",
         )
         c.argument(
             "node_public_ip_tags",
@@ -1794,6 +2506,12 @@ def load_arguments(self, _):
             "driver_type",
             arg_type=get_enum_type(gpu_driver_types),
             is_preview=True,
+        )
+        c.argument(
+            "gpu_mig_strategy",
+            arg_type=get_enum_type(gpu_mig_strategies),
+            is_preview=True,
+            help="Specify the GPU Multi-Instance GPU (MIG) strategy. Allowed values: Single, Mixed.",
         )
         # in creation scenario, use "localuser" as default
         c.argument(
@@ -1827,6 +2545,27 @@ def load_arguments(self, _):
         c.argument(
             'localdns_config',
             help='Path to a JSON file to configure the local DNS profile for a new nodepool.'
+        )
+        # secondary network interfaces
+        c.argument(
+            'secondary_network_interfaces',
+            options_list=['--secondary-network-interfaces', '--secondary-nics'],
+            help='Secondary network interface configurations as a JSON string or `@filename` to load from a file. '
+                 'Example: \'[{"type":"Standard","vnetSubnetId":"/subscriptions/.../subnets/mysubnet"}]\'',
+            is_preview=True,
+        )
+        c.argument(
+            "enable_managed_dranet",
+            action="store_true",
+            is_preview=True,
+        )
+        # prepared image specification
+        c.argument(
+            'prepared_image_specification_id',
+            options_list=["--prepared-image-specification-id", "--pis-id"],
+            is_preview=True,
+            validator=validate_prepared_image_specification_id,
+            help='The resource ID of the prepared image specification to use for provisioning nodes in the node pool.'
         )
 
     with self.argument_context("aks nodepool update") as c:
@@ -1867,16 +2606,7 @@ def load_arguments(self, _):
         c.argument("mode", arg_type=get_enum_type(node_mode_types))
         c.argument("scale_down_mode", arg_type=get_enum_type(scale_down_modes))
         # extensions
-        c.argument(
-            "enable_custom_ca_trust",
-            action="store_true",
-            validator=validate_enable_custom_ca_trust,
-        )
-        c.argument(
-            "disable_custom_ca_trust",
-            options_list=["--disable-custom-ca-trust", "--dcat"],
-            action="store_true",
-        )
+        c.argument("crg_id", validator=validate_crg_id, is_preview=True)
         c.argument(
             "allowed_host_ports", validator=validate_allowed_host_ports, is_preview=True
         )
@@ -1884,10 +2614,34 @@ def load_arguments(self, _):
             "asg_ids", validator=validate_application_security_groups, is_preview=True
         )
         c.argument(
+            "enable_managed_dranet",
+            action="store_true",
+            is_preview=True,
+        )
+        c.argument(
             "enable_artifact_streaming",
             action="store_true",
             validator=validate_artifact_streaming,
             is_preview=True,
+        )
+        c.argument(
+            "disable_artifact_streaming",
+            action="store_true",
+            validator=validate_artifact_streaming,
+            is_preview=True,
+        )
+        c.argument(
+            "enable_managed_gpu",
+            arg_type=get_three_state_flag(),
+            is_preview=True,
+            help="Enable or disable the Managed GPU experience.",
+        )
+        c.argument(
+            "managed_gpu_driver_mode",
+            options_list=["--managed-gpu-driver-mode", "--gpu-driver-mode"],
+            arg_type=get_enum_type(managed_gpu_driver_modes),
+            is_preview=True,
+            help="Specify the Managed GPU driver mode. Allowed values: DRA, DevicePlugin.",
         )
         c.argument(
             "os_sku",
@@ -1937,6 +2691,33 @@ def load_arguments(self, _):
             "node_vm_size",
             options_list=["--node-vm-size", "-s"],
             completer=get_vm_size_completion_list,
+            is_preview=True,
+        )
+        c.argument(
+            "zones",
+            zones_type,
+            options_list=["--zones", "-z"],
+            is_preview=True,
+            help='Use "auto" to migrate a regional node pool to automatic zone placement. '
+                 'Other availability zone changes are subject to service restrictions.',
+        )
+        c.argument(
+            "gpu_driver",
+            arg_type=get_enum_type(gpu_driver_install_modes)
+        )
+        c.argument(
+            "gpu_mig_strategy",
+            arg_type=get_enum_type(gpu_mig_strategies),
+            is_preview=True,
+            help="Specify the GPU Multi-Instance GPU (MIG) strategy. Allowed values: Single, Mixed.",
+        )
+        # prepared image specification
+        c.argument(
+            'prepared_image_specification_id',
+            options_list=["--prepared-image-specification-id", "--pis-id"],
+            is_preview=True,
+            validator=validate_prepared_image_specification_id,
+            help='The resource ID of the prepared image specification to use for provisioning nodes in the node pool.'
         )
 
     with self.argument_context("aks nodepool upgrade") as c:
@@ -1991,6 +2772,28 @@ def load_arguments(self, _):
     with self.argument_context("aks nodepool manual-scale delete") as c:
         c.argument("current_vm_sizes", is_preview=True)
 
+    with self.argument_context("aks nodepool auto-scale add") as c:
+        c.argument("node_vm_size", is_preview=True)
+        c.argument("min_count", type=int, is_preview=True)
+        c.argument("max_count", type=int, is_preview=True)
+
+    with self.argument_context("aks nodepool auto-scale update") as c:
+        c.argument("current_node_vm_size", is_preview=True)
+        c.argument("node_vm_size", is_preview=True)
+        c.argument("min_count", type=int, is_preview=True)
+        c.argument("max_count", type=int, is_preview=True)
+
+    with self.argument_context("aks nodepool auto-scale delete") as c:
+        c.argument("current_node_vm_size", is_preview=True)
+
+    with self.argument_context("aks nodepool get-rollback-versions") as c:
+        pass  # Uses common nodepool parameters
+
+    with self.argument_context("aks nodepool rollback") as c:
+        c.argument("aks_custom_headers", nargs="*")
+        c.argument("if_match")
+        c.argument("if_none_match")
+
     with self.argument_context("aks machine") as c:
         c.argument("cluster_name", help="The cluster name.")
         c.argument(
@@ -2020,7 +2823,7 @@ def load_arguments(self, _):
             "machine_name", help="The machine name."
         )
         c.argument(
-            "os_sku", arg_type=get_enum_type(node_os_skus), validator=validate_os_sku
+            "os_sku", arg_type=get_enum_type(node_os_skus_add), validator=validate_os_sku
         )
         c.argument(
             "zones",
@@ -2057,6 +2860,44 @@ def load_arguments(self, _):
             options_list=["--kubernetes-version"],
             validator=validate_k8s_version,
             help="Version of Kubernetes to use for the machine.",
+        )
+        c.argument(
+            "spot_max_price",
+            type=float,
+            validator=validate_spot_max_price,
+            help="The max price (in US Dollars) you are willing to pay for spot instances."
+        )
+        c.argument(
+            "enable_ultra_ssd",
+            action="store_true"
+        )
+        c.argument(
+            "eviction_policy",
+            arg_type=get_enum_type(node_eviction_policies),
+            validator=validate_eviction_policy,
+        )
+        c.argument(
+            "capacity_reservation_group",
+            options_list=["--capacity-reservation-group", "--crg"],
+            validator=validate_capacity_reservation_group,
+            is_preview=True,
+        )
+        c.argument("labels", nargs="*", validator=validate_nodepool_labels)
+        c.argument("node_taints", validator=validate_nodepool_taints)
+        c.argument("max_pods", type=int, options_list=["--max-pods", "-m"])
+
+    with self.argument_context("aks machine update") as c:
+        c.argument(
+            "machine_name", help="The machine name."
+        )
+        c.argument("tags", tags_type, help="The tags to set on the machine.")
+        c.argument("node_taints", validator=validate_nodepool_taints)
+        c.argument("labels", nargs="*", help="Labels to set on the machine.")
+        c.argument(
+            "kubernetes_version",
+            options_list=["--kubernetes-version"],
+            validator=validate_k8s_version,
+            help="Kubernetes version to use for a FlexNode machine.",
         )
 
     with self.argument_context("aks operation") as c:
@@ -2147,6 +2988,15 @@ def load_arguments(self, _):
                 validator=validate_start_time,
                 help="The start time of the maintenance window. e.g. 09:30.",
             )
+            c.argument(
+                "maintenance_window_id",
+                help=(
+                    "Resource ID of a shared MaintenanceWindow resource to link this maintenance "
+                    "configuration to. When set, the schedule lives in the referenced MaintenanceWindow "
+                    "and inline schedule arguments cannot be used. Cannot be combined with --config-file "
+                    "(set the maintenanceWindowId property in the JSON instead). Omit for no shared resource."
+                ),
+            )
 
     for scope in [
         "aks maintenanceconfiguration show",
@@ -2155,6 +3005,96 @@ def load_arguments(self, _):
         with self.argument_context(scope) as c:
             c.argument(
                 "config_name", options_list=["--name", "-n"], help="The config name."
+            )
+
+    # -- aks maintenancewindow (peer ARM resource) -----------------------------
+    # --location/-l is auto-bound by the CLI core to the `location` kwarg on
+    # each handler (same pattern as `aks_nodepool_snapshot_create`), so no
+    # explicit c.argument("location", ...) is needed here.
+    with self.argument_context("aks maintenancewindow") as c:
+        c.argument(
+            "maintenance_window_name",
+            options_list=["--name", "-n"],
+            help="The maintenance window name.",
+        )
+
+    for scope in [
+        "aks maintenancewindow create",
+        "aks maintenancewindow update",
+    ]:
+        with self.argument_context(scope) as c:
+            c.argument("tags", tags_type)
+            c.argument(
+                "config_file",
+                help=(
+                    "Path to a JSON file describing the MaintenanceWindow body. "
+                    "When supplied, the JSON wholly defines the resource on create, "
+                    "or replaces the existing `properties` block on update. "
+                    "This is the only path that can set fields without dedicated "
+                    "flags (notAllowedDates, etc.)."
+                ),
+            )
+            c.argument(
+                "schedule_type",
+                arg_type=get_enum_type(schedule_types),
+                help="Recurrence type: Daily, Weekly, AbsoluteMonthly or RelativeMonthly.",
+            )
+            c.argument(
+                "interval_days",
+                type=int,
+                help="The number of days between each set of occurrences for Daily schedule.",
+            )
+            c.argument(
+                "interval_weeks",
+                type=int,
+                help="The number of weeks between each set of occurrences for Weekly schedule.",
+            )
+            c.argument(
+                "interval_months",
+                type=int,
+                help=(
+                    "The number of months between each set of occurrences for AbsoluteMonthly "
+                    "or RelativeMonthly schedule."
+                ),
+            )
+            c.argument(
+                "day_of_week",
+                help="Day of week the maintenance occurs for Weekly or RelativeMonthly schedule.",
+            )
+            c.argument(
+                "day_of_month",
+                type=int,
+                help="Day of month the maintenance occurs for AbsoluteMonthly schedule.",
+            )
+            c.argument(
+                "week_index",
+                arg_type=get_enum_type(week_indexes),
+                help=(
+                    "Instance of the weekday specified in --day-of-week the maintenance occurs "
+                    "for RelativeMonthly schedule."
+                ),
+            )
+            c.argument(
+                "duration_hours",
+                options_list=["--duration"],
+                type=int,
+                validator=validate_duration_hours,
+                help="The length of the maintenance window in hours. Range 4-24.",
+            )
+            c.argument(
+                "utc_offset",
+                validator=validate_utc_offset,
+                help="The UTC offset in format +/-HH:mm. e.g. -08:00 or +05:30.",
+            )
+            c.argument(
+                "start_date",
+                validator=validate_start_date,
+                help="The date the maintenance window activates. e.g. 2026-06-01.",
+            )
+            c.argument(
+                "start_time",
+                validator=validate_start_time,
+                help="The start time of the maintenance window. e.g. 09:30.",
             )
 
     with self.argument_context("aks addon show") as c:
@@ -2612,11 +3552,14 @@ def load_arguments(self, _):
         c.argument("enable_kv", action="store_true")
         c.argument("keyvault_id", options_list=["--attach-kv"])
         c.argument("nginx", arg_type=get_enum_type(app_routing_nginx_configs))
+        c.argument("enable_default_domain", action="store_true", is_preview=True)
 
     with self.argument_context("aks approuting update") as c:
         c.argument("keyvault_id", options_list=["--attach-kv"])
         c.argument("enable_kv", action="store_true")
         c.argument("nginx", arg_type=get_enum_type(app_routing_nginx_configs))
+        c.argument("enable_default_domain", action="store_true", is_preview=True)
+        c.argument("disable_default_domain", action="store_true", is_preview=True)
 
     with self.argument_context("aks approuting zone add") as c:
         c.argument("dns_zone_resource_ids", options_list=["--ids"], required=True)
@@ -2628,6 +3571,12 @@ def load_arguments(self, _):
     with self.argument_context("aks approuting zone update") as c:
         c.argument("dns_zone_resource_ids", options_list=["--ids"], required=True)
         c.argument("attach_zones")
+
+    with self.argument_context("aks approuting gateway istio enable") as c:
+        c.argument("aks_custom_headers")
+
+    with self.argument_context("aks approuting gateway istio disable") as c:
+        c.argument("aks_custom_headers")
 
     with self.argument_context('aks check-network outbound') as c:
         c.argument('cluster_name', options_list=['--name', '-n'],
@@ -2888,15 +3837,228 @@ def load_arguments(self, _):
                 help="Name of the load balancer configuration. Required.",
             )
 
-    with self.argument_context("aks bastion") as c:
+    for scope in ['aks bastion enable',
+                  'aks bastion update']:
+        with self.argument_context(scope) as c:
+            c.argument(
+                "bastion_sku",
+                options_list=["--bastion-sku", "-s"],
+                arg_type=get_enum_type(bastion_skus),
+                help="set bastion sku for Azure Bastion host",
+            )
+            c.argument(
+                "bastion_scale_units",
+                options_list=["--bastion-scale-units"],
+                type=int,
+                help="Scale units for the Azure Bastion host.",
+            )
+            c.argument("aks_custom_headers")
+
+    for scope in ['aks bastion enable']:
+        with self.argument_context(scope) as c:
+            c.argument(
+                "bastion_public_ip",
+                options_list=["--bastion-public-ip"],
+                validator=validate_bastion_public_ip_id,
+                help="Optional public IP address for the Azure Bastion host.",
+            )
+
+    with self.argument_context("aks bastion tunnel") as c:
         c.argument("bastion")
         c.argument("port", type=int)
         c.argument("admin", action="store_true")
+        c.argument("kubeconfig_path")
         c.argument(
             "yes",
             options_list=["--yes", "-y"],
             help="Do not prompt for confirmation.",
             action="store_true",
+        )
+
+    # JWT Authenticator commands
+    with self.argument_context("aks jwtauthenticator") as c:
+        c.argument("cluster_name", help="The cluster name.")
+        c.argument(
+            "aks_custom_headers",
+            help="Send custom headers. When specified, format should be Key1=Value1,Key2=Value2.",
+        )
+
+    for scope in ['aks jwtauthenticator add',
+                  'aks jwtauthenticator update',
+                  'aks jwtauthenticator delete',
+                  'aks jwtauthenticator show']:
+        with self.argument_context(scope) as c:
+            c.argument('name', options_list=['--name', '-n'], required=True, help='Name of the JWT authenticator.')
+
+    for scope in ['aks jwtauthenticator add',
+                  'aks jwtauthenticator update']:
+        with self.argument_context(scope) as c:
+            c.argument('config_file', options_list=['--config-file'], type=file_type, completer=FilesCompleter(),
+                       help='Path to the JSON configuration file containing JWT authenticator properties.')
+
+    # aks identity-binding commands
+    # --allowed-subjects-from-file is optional on create (omitting it falls back
+    # to ClusterRole/ClusterRoleBinding authorization), but required on update
+    # since it is the only mutable field today -- requiring it avoids a no-op
+    # full-PUT that would needlessly re-provision the binding.
+    for scope, is_required in [('aks identity-binding create', False),
+                               ('aks identity-binding update', True)]:
+        with self.argument_context(scope) as c:
+            c.argument(
+                "allowed_subjects_from_file",
+                options_list=["--allowed-subjects-from-file", "-f"],
+                type=file_type,
+                completer=FilesCompleter(),
+                required=is_required,
+                help="Path to a JSON file containing an array of subjects authorized to use this "
+                     "identity binding for token exchange. Each entry has a required "
+                     "'namespaceSelector' and an optional 'serviceAccountSelector', each a Kubernetes "
+                     "label selector with 'matchLabels' (an array of \"key=value\" strings) and/or "
+                     "'matchExpressions'. Maximum 100 entries.",
+            )
+
+    # AKS alert configuration commands
+    with self.argument_context("aks alert-config") as c:
+        c.argument("cluster_name", help="The cluster name.")
+        c.argument(
+            "aks_custom_headers",
+            help="Send custom headers. When specified, format should be Key1=Value1,Key2=Value2.",
+        )
+
+    for scope in ['aks alert-config add',
+                  'aks alert-config update',
+                  'aks alert-config delete',
+                  'aks alert-config show']:
+        with self.argument_context(scope) as c:
+            c.argument('name', options_list=['--name', '-n'], required=True,
+                       help='Name of the alert configuration.')
+
+    for scope in ['aks alert-config add',
+                  'aks alert-config update']:
+        with self.argument_context(scope) as c:
+            c.argument('mode', arg_type=get_enum_type(['Disabled', 'Managed']),
+                       help='How AKS manages alerts for the cluster.')
+            c.argument('action_group_id', options_list=['--action-group-id'],
+                       validator=validate_action_group_id,
+                       help='Resource ID of the Azure Monitor action group to send '
+                            'notifications to. Pass an empty string to clear it.')
+
+    with self.argument_context('aks alert-config add') as c:
+        c.argument('mode', arg_type=get_enum_type(['Disabled', 'Managed']), required=True,
+                   help='How AKS manages alerts for the cluster.')
+
+    # aks list-vm-skus command
+    with self.argument_context("aks list-vm-skus") as c:
+        c.argument(
+            "location",
+            options_list=["--location", "-l"],
+            help="Location. Values from: 'az account list-locations'.",
+            required=True,
+        )
+        c.argument(
+            "size",
+            options_list=["--size", "-s"],
+            help="VM size name filter, partial name is accepted.",
+        )
+        c.argument(
+            "zone",
+            options_list=["--zone", "-z"],
+            action="store_true",
+            help="Show only VM SKUs that support availability zones.",
+        )
+        # TODO: Eventually deprecate the -all param.
+        # The List VM SKUs API already performs regional filtering so once AZ filtering is also implemented
+        # within the API, this param will no longer be required.
+        c.argument(
+            "show_all",
+            options_list=["--all"],
+            action="store_true",
+            help="Show all VM SKU information including those not available for the current subscription.",
+        )
+
+    with self.argument_context("aks prepared-image-specification create") as c:
+        c.argument(
+            "name",
+            options_list=["--name", "-n"],
+            required=True,
+            help="The prepared image specification name.",
+        )
+        c.argument(
+            "container_images",
+            nargs="+",
+            help="Container images.",
+        )
+        c.argument(
+            "customization_scripts",
+            type=validate_file_or_dict,
+            help="Customization scripts. Expected value: json-string/@json-file.",
+        )
+        c.argument(
+            "assign_identity",
+            validator=validate_assign_identity,
+            help="Specify an existing user assigned identity.",
+        )
+        c.argument(
+            "version",
+            required=True,
+            help="The prepared image specification version.",
+        )
+
+    with self.argument_context("aks prepared-image-specification update") as c:
+        c.argument(
+            "name",
+            options_list=["--name", "-n"],
+            required=True,
+            help="The prepared image specification name.",
+        )
+
+    with self.argument_context("aks prepared-image-specification delete") as c:
+        c.argument(
+            "name",
+            options_list=["--name", "-n"],
+            required=True,
+            help="The prepared image specification name.",
+        )
+
+    with self.argument_context("aks prepared-image-specification show") as c:
+        c.argument(
+            "name",
+            options_list=["--name", "-n"],
+            required=True,
+            help="The prepared image specification name.",
+        )
+
+    with self.argument_context("aks prepared-image-specification version delete") as c:
+        c.argument(
+            "pis_name",
+            required=True,
+            help="The prepared image specification name.",
+        )
+        c.argument(
+            "name",
+            options_list=["--name", "-n"],
+            required=True,
+            help="The version name.",
+        )
+
+    with self.argument_context("aks prepared-image-specification version list") as c:
+        c.argument(
+            "pis_name",
+            required=True,
+            help="The prepared image specification name.",
+        )
+
+    with self.argument_context("aks prepared-image-specification version show") as c:
+        c.argument(
+            "pis_name",
+            required=True,
+            help="The prepared image specification name.",
+        )
+        c.argument(
+            "name",
+            options_list=["--name", "-n"],
+            required=True,
+            help="The version name.",
         )
 
 
@@ -2914,3 +4076,35 @@ def _get_default_install_location(exe_name):
     else:
         install_location = None
     return install_location
+
+
+def _get_container_storage_enum_type(choices):
+    """Custom argument type that accepts both None and enum values"""
+    import argparse
+    from azure.cli.core.azclierror import InvalidArgumentValueError
+
+    class AzureContainerStorageAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            if values in [[], None]:
+                # When used as a flag without value, set as True
+                setattr(namespace, self.dest, True)
+                return
+
+            # Allow multiple enum values in a case insensitive manner
+            normalized_value_arr = values if isinstance(values, list) else str(values).split(',')
+            normalized_value_arr = [str(v).lower().strip() for v in normalized_value_arr]
+            valid_value_arr = [v for v in choices if v.lower() in normalized_value_arr]
+            if len(valid_value_arr) == len(normalized_value_arr):
+                normalized_values = valid_value_arr[0] if len(valid_value_arr) == 1 else valid_value_arr
+                setattr(namespace, self.dest, normalized_values)
+                return
+
+            # Invalid value
+            raise InvalidArgumentValueError(
+                f"Invalid value '{values}'. Valid values are: {', '.join(choices)}"
+            )
+
+    return CLIArgumentType(
+        nargs='*',  # Allow multiple values
+        action=AzureContainerStorageAction,
+    )

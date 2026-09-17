@@ -140,8 +140,8 @@ class AmgMigrateScenarioTest(ScenarioTest):
             # Close-out Instance
             self.cmd('grafana delete -g {rg} -n {name} --yes')
             self.cmd('grafana delete -g {rg} -n {name2} --yes')
-            final_count = len(self.cmd('grafana list').get_output_in_json())
-            self.assertTrue(final_count, 0)
+            final_count = len(self.cmd('grafana list -g {rg}').get_output_in_json())
+            self.assertEqual(final_count, 0)
 
 
     @AllowLargeResponse(size_kb=3072)
@@ -149,9 +149,9 @@ class AmgMigrateScenarioTest(ScenarioTest):
     def test_amg_migrate_override(self, resource_group):
         # Simple E2E test for migration where we create a new AMG instance, create a folder, data source, and dashboard, then migrate to a new AMG instance
         self.kwargs.update({
-            'name': self.create_random_name(prefix='clitestamgmigrate', length=23),
+            'name': self.create_random_name(prefix='clitestmigsrc', length=20),
             'location': 'westcentralus',
-            'name2': self.create_random_name(prefix='clitestamgmigrate', length=23)
+            'name2': self.create_random_name(prefix='clitestmigtgt', length=20)
         })
 
         owner = self._get_signed_in_user()
@@ -217,8 +217,8 @@ class AmgMigrateScenarioTest(ScenarioTest):
             # Close-out Instance
             self.cmd('grafana delete -g {rg} -n {name} --yes')
             self.cmd('grafana delete -g {rg} -n {name2} --yes')
-            final_count = len(self.cmd('grafana list').get_output_in_json())
-            self.assertTrue(final_count, 0)
+            final_count = len(self.cmd('grafana list -g {rg}').get_output_in_json())
+            self.assertEqual(final_count, 0)
 
 
     @AllowLargeResponse(size_kb=3072)
@@ -307,8 +307,8 @@ class AmgMigrateScenarioTest(ScenarioTest):
             # Close-out Instance
             self.cmd('grafana delete -g {rg} -n {name} --yes')
             self.cmd('grafana delete -g {rg} -n {name2} --yes')
-            final_count = len(self.cmd('grafana list').get_output_in_json())
-            self.assertTrue(final_count, 0)
+            final_count = len(self.cmd('grafana list -g {rg}').get_output_in_json())
+            self.assertEqual(final_count, 0)
 
 
     @AllowLargeResponse(size_kb=3072)
@@ -379,8 +379,8 @@ class AmgMigrateScenarioTest(ScenarioTest):
             # Close-out Instance
             self.cmd('grafana delete -g {rg} -n {name} --yes')
             self.cmd('grafana delete -g {rg} -n {name2} --yes')
-            final_count = len(self.cmd('grafana list').get_output_in_json())
-            self.assertTrue(final_count, 0)
+            final_count = len(self.cmd('grafana list -g {rg}').get_output_in_json())
+            self.assertEqual(final_count, 0)
 
     def _get_signed_in_user(self):
         account_info = self.cmd('account show').get_output_in_json()

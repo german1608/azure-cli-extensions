@@ -42,7 +42,8 @@ from azext_dataprotection.manual.enums import (
     get_permission_scope_values,
     get_resource_type_values,
     get_persistent_volume_restore_mode_values,
-    get_conflict_policy_values
+    get_conflict_policy_values,
+    get_all_backup_strategies,
 )
 
 vault_name_type = CLIArgumentType(help='Name of the backup vault.', options_list=['--vault-name', '-v'], type=str)
@@ -102,6 +103,15 @@ def load_arguments(self, _):
                    type=namespaced_name_resource_type,
                    options_list=['--backup-hook-references', '--backup-hook-refs'],
                    help='Property sets the hook reference to be executed during backup.')
+        c.argument('auto_protection', arg_type=get_three_state_flag(),
+                   help='Enable auto-protection for new containers. When enabled, new containers will be automatically protected. '
+                        'Use this parameter for DatasourceType AzureBlob or AzureDataLakeStorage.')
+        c.argument('auto_protection_exclusion_prefixes', type=str, nargs='+',
+                   options_list=['--auto-protection-exclusion-prefixes', '--exclusion-prefixes'],
+                   help='List of container name prefixes to exclude from auto-protection. Requires --auto-protection to be enabled.')
+        c.argument('resource_selectors', type=str, nargs='+',
+                   help='List of source volume names (or selectors expected by the service) within the selected '
+                        'Elastic SAN volume group to be backed up. Use this parameter for DatasourceType AzureElasticSAN.')
 
     with self.argument_context('dataprotection backup-instance initialize') as c:
         c.argument('datasource_type', arg_type=get_enum_type(get_datasource_types()), help="Specify the datasource type of the resource to be backed up")
@@ -134,6 +144,9 @@ def load_arguments(self, _):
         c.argument('vaulted_blob_container_list', type=validate_file_or_dict, options_list=['--vaulted-blob-container-list', '--container-blob-list'],
                    help="Enter the container list to modify a vaulted blob backup. The output for "
                    "'az dataprotection backup-instance initialize-backupconfig' needs to be provided as input")
+        c.argument('aks_backup_configuration', type=validate_file_or_dict, options_list=['--aks-backup-configuration', '--aks-config'],
+                   help="Enter the AKS backup configuration to modify AKS backup datasource parameters. "
+                   "The output for 'az dataprotection backup-instance initialize-backupconfig --datasource-type AzureKubernetesService' needs to be provided as input.")
         c.argument('use_system_assigned_identity', options_list=['--system-assigned', '--use-system-identity', '--use-system-assigned-identity'], arg_type=get_three_state_flag(), help="Use system assigned identity")
         c.argument('user_assigned_identity_arm_url', options_list=['--user-assigned', '--user-assigned-identity-arm-url', '--uami'], type=str, help="ARM ID of the User Assigned Managed Identity")
 
@@ -168,7 +181,8 @@ def load_arguments(self, _):
         c.argument('keyvault_id', type=str, help='ARM id of the key vault. Required when --datasource-type is AzureDatabaseForPostgreSQL')
         c.argument('yes', options_list=['--yes', '-y'], help='Do not prompt for confirmation.', action='store_true')
         c.argument('snapshot_resource_group_id', options_list=['--snapshot-resource-group-id', '--snapshot-rg-id'], type=str,
-                   help='ARM id of the snapshot resource group. Required when assigning permissions over snapshot resource group and the --operation is Restore')
+                   help='ARM id of the snapshot resource group. Required when assigning permissions over snapshot resource group and the --operation is Restore. '
+                        'For AzureElasticSAN restore permissions, pass the snapshot resource group used by the recovery point.')
         c.argument('target_storage_account_id', options_list=['--target-storage-account-id'], type=str,
                    help='ARM id of the target storage account. Required when assigning permissions over target storage account and the --operation is Restore')
         c.argument('user_assigned_identity_arm_url', options_list=['--user-assigned', '--user-assigned-identity-arm-url', '--uami'], type=str,
@@ -178,6 +192,27 @@ def load_arguments(self, _):
                    'json-string/@json-file. Required when --operation is Backup')
         c.argument('restore_request_object', type=validate_file_or_dict, help='Request body for operation "Restore" Expected value: '
                    'json-string/@json-file. Required when --operation is Restore')
+
+    # Enable Backup command
+    with self.argument_context('dataprotection enable-backup trigger') as c:
+        c.argument('datasource_type', type=str, help="The type of datasource to be backed up. Supported values: AzureKubernetesService.")
+        c.argument('datasource_id', type=str, help="The full ARM resource ID of the datasource to be backed up.")
+        c.argument('backup_strategy', arg_type=get_enum_type(get_all_backup_strategies()),
+                   help="Backup strategy preset (daily incremental backups). "
+                        "For AzureKubernetesService: "
+                        "Week (7-day operational store retention), "
+                        "Month (30-day operational store retention), "
+                        "DisasterRecovery (7-day operational + 90-day vault store retention), "
+                        "Custom (bring your own vault/policy). Default: Week.")
+        c.argument('backup_configuration_file', type=validate_file_or_dict,
+                   options_list=['--backup-configuration-file', '-f'],
+                   help="Path to a JSON backup configuration file. "
+                        "Supports backupVaultId and backupPolicyId "
+                        "(required for Custom strategy). "
+                        "For workload-specific settings, "
+                        "refer to the documentation.")
+        c.argument('yes', options_list=['--yes', '-y'], action='store_true',
+                   help='Do not prompt for confirmation.')
 
     with self.argument_context('dataprotection job show') as c:
         c.argument('resource_group_name', resource_group_name_type)
@@ -282,6 +317,14 @@ def load_arguments(self, _):
         c.argument('resource_modifier_reference', type=validate_file_or_dict,
                    options_list=['--resource-modifier-reference', '--resource-modifier'],
                    help='Key value mapping for resource modifier reference')
+        c.argument('resource_identifiers', type=str, nargs='+',
+                   help='List of source volume identifiers (volume names or ARM IDs) to restore. '
+                        'Use this parameter for DatasourceType AzureElasticSAN.')
+        c.argument('resource_name_overrides', type=validate_file_or_dict,
+                   options_list=['--resource-name-overrides', '--name-overrides'],
+                   help='Map of source volume names to target volume names to restore into. Keys must match selected '
+                        'source volume names from --resource-identifiers. Any source not included will be restored '
+                        'with a default naming format. Use this parameter for DatasourceType AzureElasticSAN.')
 
     with self.argument_context('dataprotection backup-instance restore initialize-for-data-recovery') as c:
         c.argument('target_resource_id', type=str, help="specify the resource ID to which the data will be restored.")
@@ -295,7 +338,7 @@ def load_arguments(self, _):
         c.argument('secret_store_uri', type=str, help="Specify the secret store uri to use for authentication")
         c.argument('rehydration_priority', arg_type=get_enum_type(get_rehydration_priority_values()), help="Specify the rehydration priority for rehydrate restore.")
         c.argument('rehydration_duration', type=int, help="Specify the rehydration duration for rehydrate restore.")
-        c.argument('restore_configuration', type=validate_file_or_dict, help="Restore configuration for restore. Use this parameter to restore with AzureKubernetesService.")
+        c.argument('restore_configuration', type=validate_file_or_dict, help="Restore configuration for restore. Use this parameter to restore with AzureKubernetesService or AzureElasticSAN.")
         c.argument('use_system_assigned_identity', options_list=['--mi-system-assigned', '--use-system-identity', '--use-system-assigned-identity'], arg_type=get_three_state_flag(), help="Use system assigned identity")
         c.argument('user_assigned_identity_arm_url', options_list=['--mi-user-assigned', '--user-assigned-identity-arm-url', '--uami'], type=str, help="ARM ID of the User Assigned Managed Identity")
 
@@ -325,7 +368,7 @@ def load_arguments(self, _):
         c.argument('container_list', type=str, nargs='+', help="specify the list of containers to restore.")
         c.argument('from_prefix_pattern', type=str, nargs='+', help="specify the prefix pattern for start range.")
         c.argument('to_prefix_pattern', type=str, nargs='+', help="specify the prefix pattern for end range.")
-        c.argument('restore_configuration', type=validate_file_or_dict, help="Restore configuration for restore. Use this parameter to restore with AzureKubernetesService.")
+        c.argument('restore_configuration', type=validate_file_or_dict, help="Restore configuration for restore. Use this parameter to restore with AzureKubernetesService or AzureElasticSAN.")
         c.argument('vaulted_blob_prefix_pattern', options_list=['--vaulted-blob-prefix-pattern', '--vaulted-blob-prefix'],
                    type=validate_file_or_dict, help="Specify the prefix pattern for vaulted blobs.")
         c.argument('use_system_assigned_identity', options_list=['--mi-system-assigned', '--use-system-identity', '--use-system-assigned-identity'], arg_type=get_three_state_flag(), help="Use system assigned identity")

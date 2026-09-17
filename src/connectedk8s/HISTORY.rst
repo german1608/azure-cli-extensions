@@ -2,6 +2,53 @@
 
 Release History
 ===============
+1.11.3
++++++++
+* Fix container log parsing issue for environments using Python Kubernetes client 36.0 or higher.
+* Revert clusterdiagnosticchecks image to 1.31.2 to address issues with network diagnostics in proxy scenarios.
+
+1.11.2
++++++++
+* Fix telemetry `Unknown` errors: wrap string exceptions, add missing instrumentation, and catch-all decorator for unhandled exceptions.
+* Propagate correlation ID end-to-end for `az connectedk8s proxy`.
+* [MultiCloudConnector] Allow AgentNotInstalled to Agent conversion in connected clusters.
+* Add debug log for helm binary location.
+* Add diagnosis logic for helm timeouts to improve failure classification.
+* Move kubeadm distribution detection to be evaluated last to prevent incorrect cluster distribution classification.
+* Updated CLIENT_PROXY_VERSION to 1.3.034631.
+* Removed workload identity preview feature flag.
+* Added telemetry for pre-onboarding diagnostic results, including diagnostics execution failures.
+* Add `Arc` to `--proxy-skip-range` default values for Azure Arc private-link endpoints.
+* Fix pre-onboarding diagnostic checks incorrectly grading a NotCompleted job as Passed when partial container output is present.
+* Updated clusterdiagnosticchecks image to 1.36.1.
+
+1.11.1
++++++++
+* Added ARM64 support for Helm binary installation.
+* Handle removal of '--all' flag in Helm 4 to ensure compatibility.
+* Added Helm overrides support for Application Gateway for Containers (AGC).
+* Updated CSP version.
+* Updated CLIENT_PROXY_VERSION to 1.3.033892.
+* Updated pre-diagnostics version.
+
+1.11.0
++++++
+* [Breaking Change] Removed deprecated '--app-id' and '--app-secret' RBAC parameters from the extension.
+* Update cluster diagnostics image to comply with Pod Security Standards-Restricted level( Updated image version:1.31.2).
+* Add endpoint overrides for Azure Government cloud environments
+* Update Proxy Image to 1.3.032281
+
+1.10.11
++++++++
+* Removed hardcoded public ARM endpoint URL for Government clouds.
+* Fixed incorrect MCR endpoint URLs for Government cloud environments.
+
+1.10.10
++++++
+* Deprecated '--app-id' and '--app-secret' RBAC parameters from the extension by adding them to _breaking_change.py.
+* Bug fix for https://github.com/Azure/azure-cli-extensions/issues/8498.
+* Update warning to use the latest kubelogin version which has support for generating PoP token.
+
 1.10.9
 ++++++
 * Added support for associating and disassociating gateways in CLI and updated SDK version to '2025-08-01-preview'.
@@ -78,7 +125,7 @@ Release History
 ++++++
 * New api version 2024-07-1-preview added
 * Adding functionality for workload identity feature.
-* Cluster create and update waits for agent state 
+* Cluster create and update waits for agent state
 
 1.7.3
 ++++++
