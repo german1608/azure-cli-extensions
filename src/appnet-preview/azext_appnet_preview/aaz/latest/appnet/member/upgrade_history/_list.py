@@ -12,23 +12,17 @@ from azure.cli.core.aaz import *
 
 
 @register_command(
-    "appnet list-versions",
+    "appnet member upgrade-history list",
     is_preview=True,
 )
-class ListVersions(AAZCommand):
-    """List available Application Network versions by location
-
-    :example: List Application Network versions in westus2
-        az appnet list-versions --location westus2
-
-    :example: List compatible Application Network versions with K8S 1.28 on westus2
-        az appnet list-versions --location westus2 --kubernetes-version 1.28
+class List(AAZCommand):
+    """List upgrade history entries for an Application Network member.
     """
 
     _aaz_info = {
         "version": "2026-08-01-preview",
         "resources": [
-            ["mgmt-plane", "/subscriptions/{}/providers/microsoft.applink/locations/{}/availableversions", "2026-08-01-preview"],
+            ["mgmt-plane", "/subscriptions/{}/resourcegroups/{}/providers/microsoft.applink/applinks/{}/applinkmembers/{}/upgradehistories", "2026-08-01-preview"],
         ]
     }
 
@@ -49,18 +43,30 @@ class ListVersions(AAZCommand):
         # define Arg Group ""
 
         _args_schema = cls._args_schema
-        _args_schema.location = AAZResourceLocationArg(
+        _args_schema.member_name = AAZStrArg(
+            options=["--member-name"],
+            help="The name of the member in the Application Network resource.",
             required=True,
+            fmt=AAZStrArgFormat(
+                pattern="^[a-zA-Z0-9-]{3,24}$",
+            ),
         )
-        _args_schema.kubernetes_version = AAZStrArg(
-            options=["--kubernetes-version"],
-            help="Kubernetes version to filter profiles",
+        _args_schema.appnet_name = AAZStrArg(
+            options=["--appnet-name"],
+            help="The name of the Application Network.",
+            required=True,
+            fmt=AAZStrArgFormat(
+                pattern="^[a-zA-Z0-9-]{3,24}$",
+            ),
+        )
+        _args_schema.resource_group = AAZResourceGroupNameArg(
+            required=True,
         )
         return cls._args_schema
 
     def _execute_operations(self):
         self.pre_operations()
-        self.AvailableVersionsListByLocation(ctx=self.ctx)()
+        self.UpgradeHistoriesListByAppLinkMember(ctx=self.ctx)()
         self.post_operations()
 
     @register_callback
@@ -76,7 +82,7 @@ class ListVersions(AAZCommand):
         next_link = self.deserialize_output(self.ctx.vars.instance.next_link)
         return result, next_link
 
-    class AvailableVersionsListByLocation(AAZHttpOperation):
+    class UpgradeHistoriesListByAppLinkMember(AAZHttpOperation):
         CLIENT_TYPE = "MgmtClient"
 
         def __call__(self, *args, **kwargs):
@@ -90,7 +96,7 @@ class ListVersions(AAZCommand):
         @property
         def url(self):
             return self.client.format_url(
-                "/subscriptions/{subscriptionId}/providers/Microsoft.AppLink/locations/{location}/availableVersions",
+                "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.AppLink/appLinks/{appLinkName}/appLinkMembers/{appLinkMemberName}/upgradeHistories",
                 **self.url_parameters
             )
 
@@ -106,7 +112,15 @@ class ListVersions(AAZCommand):
         def url_parameters(self):
             parameters = {
                 **self.serialize_url_param(
-                    "location", self.ctx.args.location,
+                    "appLinkMemberName", self.ctx.args.member_name,
+                    required=True,
+                ),
+                **self.serialize_url_param(
+                    "appLinkName", self.ctx.args.appnet_name,
+                    required=True,
+                ),
+                **self.serialize_url_param(
+                    "resourceGroupName", self.ctx.args.resource_group,
                     required=True,
                 ),
                 **self.serialize_url_param(
@@ -119,9 +133,6 @@ class ListVersions(AAZCommand):
         @property
         def query_parameters(self):
             parameters = {
-                **self.serialize_query_param(
-                    "kubernetesVersion", self.ctx.args.kubernetes_version,
-                ),
                 **self.serialize_query_param(
                     "api-version", "2026-08-01-preview",
                     required=True,
@@ -183,59 +194,29 @@ class ListVersions(AAZCommand):
             )
 
             properties = cls._schema_on_200.value.Element.properties
-            properties.fully_managed_versions = AAZObjectType(
-                serialized_name="fullyManagedVersions",
+            properties.end_timestamp = AAZStrType(
+                serialized_name="endTimestamp",
+            )
+            properties.from_version = AAZStrType(
+                serialized_name="fromVersion",
                 flags={"required": True},
             )
-            properties.kubernetes_version = AAZStrType(
-                serialized_name="kubernetesVersion",
+            properties.initiated_by = AAZStrType(
+                serialized_name="initiatedBy",
                 flags={"required": True},
             )
             properties.provisioning_state = AAZStrType(
                 serialized_name="provisioningState",
                 flags={"read_only": True},
             )
-            properties.self_managed_versions = AAZObjectType(
-                serialized_name="selfManagedVersions",
+            properties.start_timestamp = AAZStrType(
+                serialized_name="startTimestamp",
                 flags={"required": True},
             )
-
-            fully_managed_versions = cls._schema_on_200.value.Element.properties.fully_managed_versions
-            fully_managed_versions.release_channels = AAZListType(
-                serialized_name="releaseChannels",
+            properties.to_version = AAZStrType(
+                serialized_name="toVersion",
                 flags={"required": True},
             )
-
-            release_channels = cls._schema_on_200.value.Element.properties.fully_managed_versions.release_channels
-            release_channels.Element = AAZObjectType()
-
-            _element = cls._schema_on_200.value.Element.properties.fully_managed_versions.release_channels.Element
-            _element.release_channel = AAZStrType(
-                serialized_name="releaseChannel",
-                flags={"required": True},
-            )
-            _element.version = AAZStrType(
-                flags={"required": True},
-            )
-
-            self_managed_versions = cls._schema_on_200.value.Element.properties.self_managed_versions
-            self_managed_versions.versions = AAZListType(
-                flags={"required": True},
-            )
-
-            versions = cls._schema_on_200.value.Element.properties.self_managed_versions.versions
-            versions.Element = AAZObjectType()
-
-            _element = cls._schema_on_200.value.Element.properties.self_managed_versions.versions.Element
-            _element.upgrades = AAZListType(
-                flags={"required": True},
-            )
-            _element.version = AAZStrType(
-                flags={"required": True},
-            )
-
-            upgrades = cls._schema_on_200.value.Element.properties.self_managed_versions.versions.Element.upgrades
-            upgrades.Element = AAZStrType()
 
             system_data = cls._schema_on_200.value.Element.system_data
             system_data.created_at = AAZStrType(
@@ -260,8 +241,8 @@ class ListVersions(AAZCommand):
             return cls._schema_on_200
 
 
-class _ListVersionsHelper:
-    """Helper class for ListVersions"""
+class _ListHelper:
+    """Helper class for List"""
 
 
-__all__ = ["ListVersions"]
+__all__ = ["List"]
